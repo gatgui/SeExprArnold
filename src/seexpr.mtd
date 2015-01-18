@@ -1,0 +1,3 @@
+[node seexpr]
+   maya.classification STRING "utility/general"
+   maya.id INT 0x001165FF

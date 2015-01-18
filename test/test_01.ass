@@ -1,0 +1,63 @@
+
+options
+{
+   name options
+   xres 640
+   yres 480
+   outputs "RGBA RGBA filter1 driver1"
+}
+
+gaussian_filter
+{
+   name filter1
+}
+
+driver_png
+{
+   name driver1
+   filename "out.png"
+   gamma 2.2
+}
+
+persp_camera
+{
+   name camera1
+   look_at 0 0.5 0
+   position 2 2 2
+}
+
+point_light
+{
+   name light1
+   position 0 5 3
+   intensity 15
+}
+
+sphere
+{
+   name sphere1
+   center 0 0.5 0
+   radius 0.5
+   shader shader1
+   declare noise_offset constant POINT
+   noise_offset 3 5 -1
+   declare noise_scale constant INT
+   noise_scale 2
+}
+
+standard
+{
+   name shader1
+   #Kd_color 1 0 0
+   Kd_color expr1
+}
+
+seexpr
+{
+   name expr1
+   expression "$user::noise_scale * $amp * voronoi($freq * ($offset + $user::noise_offset + $sg::P), 2)"
+   fparam_name 2 1 STRING "freq" "amp"
+   fparam_value 2 1 FLOAT 10 0.5
+   vparam_name "offset"
+   vparam_value -3 -5 1
+}

@@ -1,3 +1,10 @@
+.build
+release
+debug
+*.dblite
+excons.cache
+out.png
+
 # Compiled Object files
 *.slo
 *.lo

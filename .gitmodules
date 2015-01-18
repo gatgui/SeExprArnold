@@ -1,0 +1,6 @@
+[submodule "excons"]
+	path = excons
+	url = git://github.com/gatgui/excons.git
+[submodule "SeExpr"]
+	path = SeExpr
+	url = git://github.com/gatgui/SeExpr.git
