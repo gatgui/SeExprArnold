@@ -1,22 +1,25 @@
 # SeExprArnold
 SeExpr shader for Arnold renderer
 
-1/ How to build
+## How to build
 
    scons with-arnold=/path/to/arnold [debug=1]
 
-2/ How to install
+## How to install
 
    The arnold plugin will be outputed in release/arnold (or debug/arnold)
    Just add this directory to your ARNOLD_PLUGIN_PATH
 
-3/ How to use
+## How to use
    
    Shader specific variables can be access using '$varname'
-   Shader globals can be accessed using '$sg::varname'
-   Primitive variables can be accessed using '$usrr::varname'
 
-   List of supported shader globals:
+   Shader globals can be accessed using '$sg::varname'
+
+   Primitive variables can be accessed using '$user::varname'
+
+   The following shader globals are available:
+   
       P
       Po
       N
@@ -64,10 +67,9 @@ SeExpr shader for Arnold renderer
       Rr_refr
       Rr_diff
       Rr_gloss
-   
-      // The following extras require 'frame', 'fps', motion_start_frame' and 'motion_end_frame'
-      // to be defined on option node:
-   
+
+   Additionally, when 'frame', 'fps', motion_start_frame' and 'motion_end_frame' are defined on option node, the following extra variables may be accessed:
+
       fps
       frame                : render frame
       sample_frame         : 'time' in frame
