@@ -1282,6 +1282,19 @@ node_update
          char tmp[128];
          bool allParamsConstant = true;
          
+         AtArray *fvalues = AiNodeGetArray(node, "fparam_value");
+         if (fvalues->nelements != fnames->nelements)
+         {
+            if (fvalues->nelements < fnames->nelements)
+            {
+               AiMsgWarning("[seexpr] More float param variable names than values. Missing values will be set to 0.");
+            }
+            else
+            {
+               AiMsgWarning("[seexpr] More float param variable values than names. Extra values will be ignored.");
+            }
+         }
+         
          for (unsigned int i=0; i<fnames->nelements; ++i)
          {
             std::string var = AiArrayGetStr(fnames, i);
@@ -1293,6 +1306,19 @@ node_update
                {
                   allParamsConstant = false;
                }
+            }
+         }
+         
+         AtArray *vvalues = AiNodeGetArray(node, "vparam_value");
+         if (vvalues->nelements != vnames->nelements)
+         {
+            if (vvalues->nelements < vnames->nelements)
+            {
+               AiMsgWarning("[seexpr] More vector param variable names than values. Missing values will be set to (0, 0, 0).");
+            }
+            else
+            {
+               AiMsgWarning("[seexpr] More vector param variable values than names. Extra values will be ignored.");
             }
          }
          
@@ -1457,22 +1483,20 @@ shader_evaluate
          if (expr && expr->isValid())
          {
             AtArray *fvalues = AiShaderEvalParamArray(p_fparam_value);
-            if (fvalues->nelements != data->numfvars)
-            {
-               //AiMsgError("[seexpr] fparam_name and fparam_value size mismatch (%d for %d)", data->numfvars, fvalues->nelements);
-               AiMsgWarning("[seexpr] fparam_name and fparam_value size mismatch (%d for %d)", data->numfvars, fvalues->nelements);
-               sg->out.VEC = Failed(sg, node, data, stopOnError, "Invalid float parameters setup");
-               return;
-            }
+            // if (fvalues->nelements != data->numfvars)
+            // {
+            //    AiMsgWarning("[seexpr] fparam_name and fparam_value size mismatch (%d for %d)", data->numfvars, fvalues->nelements);
+            //    sg->out.VEC = Failed(sg, node, data, stopOnError, "Invalid float parameters setup");
+            //    return;
+            // }
 
             AtArray *vvalues = AiShaderEvalParamArray(p_vparam_value);
-            if (vvalues->nelements != data->numvvars)
-            {
-               //AiMsgError("[seexpr] vparam_name and vparam_value size mismatch (%d for %d)", data->numvvars, vvalues->nelements);
-               AiMsgWarning("[seexpr] vparam_name and vparam_value size mismatch (%d for %d)", data->numvvars, vvalues->nelements);
-               sg->out.VEC = Failed(sg, node, data, stopOnError, "Invalid vector parameters setup");
-               return;
-            }
+            // if (vvalues->nelements != data->numvvars)
+            // {
+            //    AiMsgWarning("[seexpr] vparam_name and vparam_value size mismatch (%d for %d)", data->numvvars, vvalues->nelements);
+            //    sg->out.VEC = Failed(sg, node, data, stopOnError, "Invalid vector parameters setup");
+            //    return;
+            // }
 
             if (!expr->bindExternals(node, sg))
             {
