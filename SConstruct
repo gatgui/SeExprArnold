@@ -17,7 +17,8 @@ prjs = [
    "ext"     : arnold.PluginExt(),
    "srcs"    : glob.glob("src/*.cpp"),
    "libs"    : ["SeExpr"],
-   "install" : {"arnold": "src/seexpr.mtd"},
+   "install" : {"arnold": "src/seexpr.mtd",
+                "maya": "maya/aiSeexprTemplate.py"},
    "custom"  : [arnold.Require]
   }
 ]
