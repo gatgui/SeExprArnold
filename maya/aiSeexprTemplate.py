@@ -36,18 +36,70 @@ class AEaiSeexprTemplate(ShaderAETemplate):
       
       cmds.scriptJob(parent=field, replacePrevious=1, attributeChange=(nodeAttr, lambda *args: self.expressionUpdated(nodeAttr, field)))
    
-   def removeFloatVariable(self, nodeAttr, varslayout):
-      pass
+   def updateVariableName(self, attr, fld):
+      cmds.setAttr(attr, cmds.textField(fld, query=1, text=1), type="string")
    
-   def addFloatVariable(self, nodeAttr, varslayout):
+   def setupVariableNameCallback(self, attr, fld):
+      cmds.textField(fld, edit=1, changeCommand=lambda *args: self.updateVariableName(attr, fld))
+   
+   def updateFloatVariableValue(self, attr, fld):
+      cmds.setAttr(attr, cmds.floatField(fld, query=1, value=1))
+   
+   def setupFloatVariableValueCallback(self, attr, fld):
+      cmds.floatField(fld, edit=1, changeCommand=lambda *args: self.updateFloatVariableValue(attr, fld))
+   
+   def removeFloatVariable(self, nodeAttr, varslayout, index):
+      # Remove variable
+      children = cmds.columnLayout(varslayout, query=1, childArray=1)
+      
+      if len(children) <= index:
+         return
+      
+      baseNameAttr = nodeAttr
+      baseValueAttr = nodeAttr.replace("fparam_name", "fparam_value");
+      
+      for i in xrange(index+1, len(children)):
+         rembtn, namefld, _, valfld = cmds.formLayout(children[i], query=1, childArray=1)
+         
+         indexStr = "[%d]" % (i - 1)
+         nextIndexStr = "[%d]" % i
+         
+         nameAttr = baseNameAttr + indexStr
+         valueAttr = baseValueAttr + indexStr
+         
+         cmds.setAttr(nameAttr, cmds.getAttr(baseNameAttr + nextIndexStr), type="string")
+         cmds.setAttr(valueAttr, cmds.getAttr(baseValueAttr + nextIndexStr));
+         
+         self.setupVariableNameCallback(nameAttr, namefld)
+         self.setupFloatVariableValueCallback(valueAttr, valfld)
+         cmds.button(rembtn, edit=1, command=lambda *args: self.removeFloatVariable(nodeAttr, varslayout, i-1))
+      
+      cmds.deleteUI(children[index])
+      
+      cmds.removeMultiInstance("%s[%d]" % (baseNameAttr, len(children)-1), b=True)
+      cmds.removeMultiInstance("%s[%d]" % (baseValueAttr, len(children)-1), b=True)
+   
+   def addFloatVariable(self, nodeAttr, varslayout, name=None, value=None):
       n = cmds.columnLayout(varslayout, query=1, numberOfChildren=1)
+      
+      indexStr = "[%d]" % n
+      nameAttr = nodeAttr + indexStr
+      valueAttr = nodeAttr.replace("fparam_name", "fparam_value") + indexStr
       
       form = cmds.formLayout(numberOfDivisions=100, parent=varslayout)
       
       rembtn = cmds.button(label="-")
-      namefld = cmds.textField(text="")
+      namefld = cmds.textField(text=("fparam%d" % n if name is None else name))
       vallbl = cmds.text(label="=")
-      valfld = cmds.floatField(value=0.0)
+      valfld = cmds.floatField(value=(0.0 if value is None else value))
+      
+      cmds.setAttr(nameAttr, ("fparam%d" % n if name is None else name), type="string")
+      cmds.setAttr(valueAttr, (0.0 if value is None else value))
+      
+      self.setupVariableNameCallback(nameAttr, namefld)
+      self.setupFloatVariableValueCallback(valueAttr, valfld)
+      
+      cmds.button(rembtn, edit=1, command=lambda *args: self.removeFloatVariable(nodeAttr, varslayout, n))
       
       cmds.formLayout(form, edit=1,
                       attachForm=[(rembtn, "top", 0), (rembtn, "bottom", 0), (rembtn, "left", 0),
@@ -62,20 +114,75 @@ class AEaiSeexprTemplate(ShaderAETemplate):
                       attachPosition=[(namefld, "right", 0, 30),
                                       (valfld, "right", 0, 100)])
    
-   def removeVectorVariable(self, nodeAttr, varslayout):
-      pass
+   def updateVectorVariableValue(self, attr, fld0, fld1, fld2):
+      x = cmds.floatField(fld0, query=1, value=1)
+      y = cmds.floatField(fld1, query=1, value=1)
+      z = cmds.floatField(fld2, query=1, value=1)
+      cmds.setAttr(attr, x, y, z);
    
-   def addVectorVariable(self, nodeAttr, varslayout):
+   def setupVectorVariableValueCallback(self, attr, fld0, fld1, fld2):
+      cmds.floatField(fld0, edit=1, changeCommand=lambda *args: self.updateVectorVariableValue(attr, fld0, fld1, fld2))
+      cmds.floatField(fld1, edit=1, changeCommand=lambda *args: self.updateVectorVariableValue(attr, fld0, fld1, fld2))
+      cmds.floatField(fld2, edit=1, changeCommand=lambda *args: self.updateVectorVariableValue(attr, fld0, fld1, fld2))
+   
+   def removeVectorVariable(self, nodeAttr, varslayout, index):
+      children = cmds.columnLayout(varslayout, query=1, childArray=1)
+      
+      if len(children) <= index:
+         return
+      
+      baseNameAttr = nodeAttr
+      baseValueAttr = nodeAttr.replace("vparam_name", "vparam_value");
+      
+      for i in xrange(index+1, len(children)):
+         rembtn, namefld, _, val0fld, val1fld, val2fld = cmds.formLayout(children[i], query=1, childArray=1)
+         
+         indexStr = "[%d]" % (i - 1)
+         nextIndexStr = "[%d]" % i
+         
+         nameAttr = baseNameAttr + indexStr
+         valueAttr = baseValueAttr + indexStr
+         
+         cmds.setAttr(nameAttr, cmds.getAttr(baseNameAttr + nextIndexStr), type="string")
+         value = cmds.getAttr(baseValueAttr + nextIndexStr)[0]
+         cmds.setAttr(valueAttr, *value);
+         
+         self.setupVariableNameCallback(nameAttr, namefld)
+         self.setupVectorVariableValueCallback(valueAttr, val0fld, val1fld, val2fld)
+         cmds.button(rembtn, edit=1, command=lambda *args: self.removeVectorVariable(nodeAttr, varslayout, i-1))
+      
+      cmds.deleteUI(children[index])
+      
+      cmds.removeMultiInstance("%s[%d]" % (baseNameAttr, len(children)-1), b=True)
+      cmds.removeMultiInstance("%s[%d]" % (baseValueAttr, len(children)-1), b=True)
+   
+   def addVectorVariable(self, nodeAttr, varslayout, name=None, value=None):
       n = cmds.columnLayout(varslayout, query=1, numberOfChildren=1)
+      
+      indexStr = "[%d]" % n
+      nameAttr = nodeAttr + indexStr
+      valueAttr = nodeAttr.replace("vparam_name", "vparam_value") + indexStr
+      
+      if value is None:
+         value = (0.0, 0.0, 0.0)
+      else:
+         value = value[0]
       
       form = cmds.formLayout(numberOfDivisions=100, parent=varslayout)
       
       rembtn = cmds.button(label="-")
-      namefld = cmds.textField(text="")
+      namefld = cmds.textField(text=("vparam%d" % n if name is None else name))
       vallbl = cmds.text(label="=")
-      val0fld = cmds.floatField(value=0.0)
-      val1fld = cmds.floatField(value=0.0)
-      val2fld = cmds.floatField(value=0.0)
+      val0fld = cmds.floatField(value=value[0])
+      val1fld = cmds.floatField(value=value[1])
+      val2fld = cmds.floatField(value=value[2])
+      
+      cmds.setAttr(nameAttr, ("vparam%d" % n if name is None else name), type="string")
+      cmds.setAttr(valueAttr, *value)
+      
+      self.setupVariableNameCallback(nameAttr, namefld)
+      self.setupVectorVariableValueCallback(valueAttr, val0fld, val1fld, val2fld)
+      cmds.button(rembtn, edit=1, command=lambda *args: self.removeVectorVariable(nodeAttr, varslayout, n))
       
       cmds.formLayout(form, edit=1,
                       attachForm=[(rembtn, "top", 0), (rembtn, "bottom", 0), (rembtn, "left", 0),
@@ -97,9 +204,110 @@ class AEaiSeexprTemplate(ShaderAETemplate):
                                       (val2fld, "right", 0, 100)])
    
    def removeAllVariables(self, nodeAttr, varslayout):
+      nameAttr = nodeAttr
+      
+      valueAttr = nodeAttr.replace("fparam_name", "fparam_value")
+      if valueAttr == nameAttr:
+         valueAttr = nameAttr.replace("vparam_name", "vparam_value")
+      
+      indices = cmds.getAttr(nameAttr, multiIndices=1)
+      for index in indices:
+         cmds.removeMultiInstance("%s[%d]" % (nameAttr, index), b=True)
+      
+      indices = cmds.getAttr(valueAttr, multiIndices=1)
+      for index in indices:
+         cmds.removeMultiInstance("%s[%d]" % (valueAttr, index), b=True)
+      
       children = cmds.columnLayout(varslayout, query=1, childArray=1)
       for child in children:
          cmds.deleteUI(child)
+   
+   def syncFloatVariable(self, nameAttr, valueAttr, idx, layout):
+      elemNameAttr = "%s[%d]" % (nameAttr, idx)
+      elemValueAttr = "%s[%d]" % (valueAttr, idx)
+      
+      children = cmds.formLayout(layout, query=1, childArray=1)
+      
+      cmds.textField(children[1], edit=1, text=cmds.getAttr(elemNameAttr))
+      cmds.floatField(children[3], edit=1, value=cmds.getAttr(elemValueAttr))
+      
+      self.setupVariableNameCallback(elemNameAttr, children[1])
+      self.setupFloatVariableValueCallback(elemValueAttr, children[3])
+   
+   def syncVectorVariable(self, nameAttr, valueAttr, idx, layout):
+      elemNameAttr = "%s[%d]" % (nameAttr, idx)
+      elemValueAttr = "%s[%d]" % (valueAttr, idx)
+
+      children = cmds.formLayout(layout, query=1, childArray=1)
+      
+      value = cmds.getAttr(elemValueAttr)
+      value = value[0]
+      
+      cmds.textField(children[1], edit=1, text=cmds.getAttr(elemNameAttr))
+      cmds.floatField(children[3], edit=1, value=value[0])
+      cmds.floatField(children[4], edit=1, value=value[1])
+      cmds.floatField(children[5], edit=1, value=value[2])
+
+      self.setupVariableNameCallback(elemNameAttr, children[1])
+      self.setupVectorVariableValueCallback(elemValueAttr, children[3], children[4], children[5])
+   
+   def syncNameValueArrays(self, nameAttr, valueAttr, vectorValues=False):
+      count0 = cmds.getAttr(nameAttr, size=1)
+      count1 = cmds.getAttr(valueAttr, size=1)
+      
+      count = (count0 if count0 < count1 else count1)
+      
+      indices0 = cmds.getAttr(nameAttr, multiIndices=1)
+      indices1 = cmds.getAttr(valueAttr, multiIndices=1)
+      
+      if count0 > count1:
+         for i in xrange(count1, count0):
+            cmds.removeMultiInstance("%s[%d]" % (nameAttr, indices0[i]), b=True)
+         indices0 = indices0[0:count1]
+         
+      elif count1 > count0:
+         for i in xrange(count0, count1):
+            cmds.removeMultiInstance("%s[%d]" % (valueAttr, indices1[i]), b=True)
+         indices1 = indices1[0:count0]
+      
+      reorder = False
+      for i in xrange(count):
+         if indices0[i] != i or indices1[i] != i:
+            reorder = True
+            break
+      
+      if reorder:
+         vl = []
+         rl0 = set()
+         rl1 = set()
+         
+         # Get current name/value pairs and list indices beyond count
+         for i in xrange(count):
+            vl.append((cmds.getAttr("%s[%d]" % (nameAttr, indices0[i])),
+                       cmds.getAttr("%s[%d]" % (valueAttr, indices1[i]))))
+            
+            if indices0[i] >= count:
+               rl0.add(indices0[i])
+            
+            if indices1[i] >= count:
+               rl0.add(indices1[i])
+         
+         for i in xrange(count):
+            k, v = vl[i]
+            cmds.setAttr("%s[%d]" % (nameAttr, i), k, type="string")
+            if vectorValues:
+               v = v[0]
+               cmds.setAttr("%s[%d]" % (valueAttr, i), *v)
+            else:
+               cmds.setAttr("%s[%d]" % (valueAttr, i), v)
+         
+         for i in rl0:
+            cmds.removeMultiInstance("%s[%d]" % (nameAttr, i), b=True)
+         
+         for i in rl1:
+            cmds.removeMultiInstance("%s[%d]" % (valueAttr, i), b=True)
+      
+      return count
    
    def createFloatVariables(self, nodeAttr):
       form = cmds.formLayout(numberOfDivisions=100)
@@ -145,6 +353,33 @@ class AEaiSeexprTemplate(ShaderAETemplate):
       cmds.button(rembtn, edit=1, command=lambda *args: self.removeAllVariables(nodeAttr, varslayout))
       
       # Update content
+      nameAttr = nodeAttr
+      valueAttr = nodeAttr.replace("fparam_name", "fparam_value")
+      
+      # Sync name/value arrays
+      count = self.syncNameValueArrays(nameAttr, valueAttr, vectorValues=False)
+      
+      # Build UI
+      children = cmds.columnLayout(varslayout, query=1, childArray=1)
+      if children is None:
+         children = []
+      uicount = len(children)
+      
+      # Remove extra variables
+      while uicount > count:
+         cmds.deleteUI(children[-1])
+         uicount -= 1
+      
+      # Sync existing values
+      for i in xrange(uicount):
+         self.syncFloatVariable(nameAttr, valueAttr, i, children[i])
+      
+      # Add missing variables
+      while uicount < count:
+         self.addFloatVariable(nodeAttr, varslayout,
+                               name=cmds.getAttr("%s[%d]" % (nameAttr, uicount)),
+                               value=cmds.getAttr("%s[%d]" % (valueAttr, uicount)))
+         uicount += 1
    
    def createVectorVariables(self, nodeAttr):
       form = cmds.formLayout(numberOfDivisions=100)
@@ -190,13 +425,42 @@ class AEaiSeexprTemplate(ShaderAETemplate):
       cmds.button(rembtn, edit=1, command=lambda *args: self.removeAllVariables(nodeAttr, varslayout))
       
       # Update content
+      nameAttr = nodeAttr
+      valueAttr = nodeAttr.replace("vparam_name", "vparam_value")
+      
+      # Sync name/value arrays
+      count = self.syncNameValueArrays(nameAttr, valueAttr, vectorValues=True)
+      
+      # Build UI
+      children = cmds.columnLayout(varslayout, query=1, childArray=1)
+      if children is None:
+         children = []
+      uicount = len(children)
+      
+      # Remove extra variables
+      while uicount > count:
+         cmds.deleteUI(children[-1])
+         uicount -= 1
+      
+      # Sync existing values
+      for i in xrange(uicount):
+         self.syncVectorVariable(nameAttr, valueAttr, i, children[i])
+      
+      # Add missing variables
+      while uicount < count:
+         self.addVectorVariable(nodeAttr, varslayout,
+                               name=cmds.getAttr("%s[%d]" % (nameAttr, uicount)),
+                               value=cmds.getAttr("%s[%d]" % (valueAttr, uicount)))
+         uicount += 1
    
    def setup(self):
       self.addSwatch()
       
       self.beginScrollLayout()
       
+      self.beginLayout("Expression", collapse=False)
       self.addCustom('expression', self.createExpression, self.replaceExpression)
+      self.endLayout()
       
       self.beginLayout("Float variables", collapse=False)
       self.addCustom('fparam_name', self.createFloatVariables, self.replaceFloatVariables)
@@ -214,3 +478,4 @@ class AEaiSeexprTemplate(ShaderAETemplate):
       mel.eval('AEdependNodeTemplate("%s")' % self.nodeName)
       self.addExtraControls()
       self.endScrollLayout()
+   
