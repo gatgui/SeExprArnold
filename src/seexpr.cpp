@@ -410,6 +410,52 @@ public:
       }
    }
    
+   bool getNodeConstantBool(AtNode *node, const char *name, bool &val, const char *msg=NULL) const
+   {
+      const AtUserParamEntry *pe = AiNodeLookUpUserParameter(node, name);
+      if (pe != 0)
+      {
+         int type = AiUserParamGetType(pe);
+         int cat = AiUserParamGetCategory(pe);
+         
+         if (cat == AI_USERDEF_CONSTANT)
+         {
+            switch (type)
+            {
+            case AI_TYPE_BOOLEAN:
+               val = AiNodeGetBool(node, name);
+               break;
+            case AI_TYPE_BYTE:
+               val = (AiNodeGetByte(node, name) != 0);
+               break;
+            case AI_TYPE_INT:
+               val = (AiNodeGetInt(node, name) != 0);
+               break;
+            case AI_TYPE_UINT:
+               val = (AiNodeGetUInt(node, name) != 0);
+               break;
+            case AI_TYPE_FLOAT:
+               val = (AiNodeGetFlt(node, name) != 0.0f);
+               break;
+            default:
+               AiMsgWarning("[seexpr] \"%s\" parameter on node \"%s\" should be a boolean, an integer or a float (%s)", name, AiNodeGetName(node), (msg ? msg : ""));
+               return false;
+            }
+            return true;
+         }
+         else
+         {
+            AiMsgWarning("[seexpr] \"%s\" parameter on node \"%s\" must be a constant (%s)", name, AiNodeGetName(node), (msg ? msg : ""));
+            return false;
+         }
+      }
+      else
+      {
+         AiMsgWarning("[seexpr] \"%s\" parameter not defined on node \"%s\" (%s)", name, AiNodeGetName(node), (msg ? msg : ""));
+         return false;
+      }
+   }
+   
    void initOptionsVar()
    {
       switch (mWhich)
@@ -424,13 +470,37 @@ public:
       case shutter_open_frame:
       case shutter_close_frame:
          {
+            bool relative = false;
+            float frame = 0.0f;
             AtNode *opts = AiUniverseGetOptions();
+            if (getNodeConstantBool(opts, "relative_motion_frame", relative, "Defaults to false") && relative)
+            {
+               getNodeConstantFloat(opts, "frame", frame, "Defaults to 0");
+            }
             if (!getNodeConstantFloat(opts, "motion_start_frame", mMotionStart, "Defaults to 'frame'"))
             {
-               getNodeConstantFloat(opts, "frame", mMotionStart, "Defaults to 0");
+               if (relative)
+               {
+                  // already have value in frame variable
+                  mMotionStart = frame;
+               }
+               else
+               {
+                  getNodeConstantFloat(opts, "frame", mMotionStart, "Defaults to 0");
+               }
             }
-            mMotionEnd = mMotionStart;
-            getNodeConstantFloat(opts, "motion_end_frame", mMotionEnd, "Defaults to 'motion_start_frame'");
+            else
+            {
+               mMotionStart += frame;
+            }
+            if (!getNodeConstantFloat(opts, "motion_end_frame", mMotionEnd, "Defaults to 'motion_start_frame'"))
+            {
+               mMotionEnd = mMotionStart;
+            }
+            else
+            {
+               mMotionEnd += frame;
+            }
          }
          break;
       default:
