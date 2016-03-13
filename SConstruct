@@ -8,6 +8,9 @@ excons.SetArgument("no-arch", 1)
 
 env = excons.MakeBaseEnv()
 
+if sys.platform != "win32":
+  env.Append(CPPFLAGS=" -Wno-unused-parameter")
+
 SConscript("SeExpr/SConstruct")
 
 prjs = [
