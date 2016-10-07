@@ -24,10 +24,6 @@
 #  define AI_MAX_THREADS 64
 #endif
 
-#if AI_VERSION_ARCH_NUM > 4 || (AI_VERSION_ARCH_NUM == 4 && AI_VERSION_MAJOR_NUM >= 1)
-#  define ARNOLD_4_1_AND_UP
-#endif
-
 AI_SHADER_NODE_EXPORT_METHODS(agSeExprMtd);
 
 enum agSeExpParams
@@ -53,7 +49,26 @@ struct NodeData
    unsigned int numfvars;
    unsigned int numvvars;
    std::map<std::string, unsigned int> varindex;
+   bool stopOnError;
 };
+
+namespace SSTR
+{
+   extern AtString expression;
+   extern AtString fparam_name;
+   extern AtString fparam_value;
+   extern AtString vparam_name;
+   extern AtString vparam_value;
+   extern AtString stop_on_error;
+   extern AtString linkable;
+   extern AtString fps;
+   extern AtString motion_start_frame;
+   extern AtString motion_end_frame;
+   extern AtString frame;
+   extern AtString relative_motion_frame;
+   extern AtString shutter_start;
+   extern AtString shutter_end;
+}
 
 // ---
 
@@ -75,10 +90,8 @@ public:
       dPdy,
       dPdu,
       dPdv,
-#ifdef ARNOLD_4_1_AND_UP
       dNdx,
       dNdy,
-#endif
       dDdx,
       dDdy,
       Ld,
@@ -145,10 +158,8 @@ public:
          sNameToEnum["dPdy"] = dPdy;
          sNameToEnum["dPdu"] = dPdu;
          sNameToEnum["dPdv"] = dPdv;
-#ifdef ARNOLD_4_1_AND_UP
          sNameToEnum["dNdx"] = dNdx;
          sNameToEnum["dNdy"] = dNdy;
-#endif
          sNameToEnum["dDdx"] = dDdx;
          sNameToEnum["dDdy"] = dDdy;
          sNameToEnum["Ld"] = Ld;
@@ -218,10 +229,8 @@ public:
          "dPdy",
          "dPdu",
          "dPdv",
-#ifdef ARNOLD_4_1_AND_UP
          "dNdx",
          "dNdy",
-#endif
          "dDdx",
          "dDdy",
          "Ld",
@@ -367,7 +376,7 @@ public:
       }
    }
    
-   bool getNodeConstantFloat(AtNode *node, const char *name, float &val, const char *msg=NULL) const
+   bool getNodeConstantFloat(AtNode *node, AtString name, float &val, const char *msg=NULL) const
    {
       const AtUserParamEntry *pe = AiNodeLookUpUserParameter(node, name);
       if (pe != 0)
@@ -392,20 +401,66 @@ public:
                val = AiNodeGetFlt(node, name);
                break;
             default:
-               AiMsgWarning("[seexpr] \"%s\" parameter on node \"%s\" should be a float or an integer (%s)", name, AiNodeGetName(node), (msg ? msg : ""));
+               AiMsgWarning("[seexpr] \"%s\" parameter on node \"%s\" should be a float or an integer (%s)", name.c_str(), AiNodeGetName(node), (msg ? msg : ""));
                return false;
             }
             return true;
          }
          else
          {
-            AiMsgWarning("[seexpr] \"%s\" parameter on node \"%s\" must be a constant (%s)", name, AiNodeGetName(node), (msg ? msg : ""));
+            AiMsgWarning("[seexpr] \"%s\" parameter on node \"%s\" must be a constant (%s)", name.c_str(), AiNodeGetName(node), (msg ? msg : ""));
             return false;
          }
       }
       else
       {
-         AiMsgWarning("[seexpr] \"%s\" parameter not defined on node \"%s\" (%s)", name, AiNodeGetName(node), (msg ? msg : ""));
+         AiMsgWarning("[seexpr] \"%s\" parameter not defined on node \"%s\" (%s)", name.c_str(), AiNodeGetName(node), (msg ? msg : ""));
+         return false;
+      }
+   }
+   
+   bool getNodeConstantBool(AtNode *node, AtString name, bool &val, const char *msg=NULL) const
+   {
+      const AtUserParamEntry *pe = AiNodeLookUpUserParameter(node, name);
+      if (pe != 0)
+      {
+         int type = AiUserParamGetType(pe);
+         int cat = AiUserParamGetCategory(pe);
+         
+         if (cat == AI_USERDEF_CONSTANT)
+         {
+            switch (type)
+            {
+            case AI_TYPE_BOOLEAN:
+               val = AiNodeGetBool(node, name);
+               break;
+            case AI_TYPE_BYTE:
+               val = (AiNodeGetByte(node, name) != 0);
+               break;
+            case AI_TYPE_INT:
+               val = (AiNodeGetInt(node, name) != 0);
+               break;
+            case AI_TYPE_UINT:
+               val = (AiNodeGetUInt(node, name) != 0);
+               break;
+            case AI_TYPE_FLOAT:
+               val = (AiNodeGetFlt(node, name) != 0.0f);
+               break;
+            default:
+               AiMsgWarning("[seexpr] \"%s\" parameter on node \"%s\" should be a boolean, an integer or a float (%s)", name.c_str(), AiNodeGetName(node), (msg ? msg : ""));
+               return false;
+            }
+            return true;
+         }
+         else
+         {
+            AiMsgWarning("[seexpr] \"%s\" parameter on node \"%s\" must be a constant (%s)", name.c_str(), AiNodeGetName(node), (msg ? msg : ""));
+            return false;
+         }
+      }
+      else
+      {
+         AiMsgWarning("[seexpr] \"%s\" parameter not defined on node \"%s\" (%s)", name.c_str(), AiNodeGetName(node), (msg ? msg : ""));
          return false;
       }
    }
@@ -415,22 +470,46 @@ public:
       switch (mWhich)
       {
       case fps:
-         getNodeConstantFloat(AiUniverseGetOptions(), "fps", mFPS, "Defaults to 24");
+         getNodeConstantFloat(AiUniverseGetOptions(), SSTR::fps, mFPS, "Defaults to 24");
          break;
       case frame:
-         getNodeConstantFloat(AiUniverseGetOptions(), "frame", mFrame, "Defaults to 0");
+         getNodeConstantFloat(AiUniverseGetOptions(), SSTR::frame, mFrame, "Defaults to 0");
          break;
       case sample_frame:
       case shutter_open_frame:
       case shutter_close_frame:
          {
+            bool relative = false;
+            float frame = 0.0f;
             AtNode *opts = AiUniverseGetOptions();
-            if (!getNodeConstantFloat(opts, "motion_start_frame", mMotionStart, "Defaults to 'frame'"))
+            if (getNodeConstantBool(opts, SSTR::relative_motion_frame, relative, "Defaults to false") && relative)
             {
-               getNodeConstantFloat(opts, "frame", mMotionStart, "Defaults to 0");
+               getNodeConstantFloat(opts, SSTR::frame, frame, "Defaults to 0");
             }
-            mMotionEnd = mMotionStart;
-            getNodeConstantFloat(opts, "motion_end_frame", mMotionEnd, "Defaults to 'motion_start_frame'");
+            if (!getNodeConstantFloat(opts, SSTR::motion_start_frame, mMotionStart, "Defaults to 'frame'"))
+            {
+               if (relative)
+               {
+                  // already have value in frame variable
+                  mMotionStart = frame;
+               }
+               else
+               {
+                  getNodeConstantFloat(opts, SSTR::frame, mMotionStart, "Defaults to 0");
+               }
+            }
+            else
+            {
+               mMotionStart += frame;
+            }
+            if (!getNodeConstantFloat(opts, SSTR::motion_end_frame, mMotionEnd, "Defaults to 'motion_start_frame'"))
+            {
+               mMotionEnd = mMotionStart;
+            }
+            else
+            {
+               mMotionEnd += frame;
+            }
          }
          break;
       default:
@@ -455,8 +534,8 @@ public:
             
             if (cam)
             {
-               mShutterOpenTime = AiNodeGetFlt(cam, "shutter_start");
-               mShutterCloseTime = AiNodeGetFlt(cam, "shutter_end");
+               mShutterOpenTime = AiNodeGetFlt(cam, SSTR::shutter_start);
+               mShutterCloseTime = AiNodeGetFlt(cam, SSTR::shutter_end);
                
                float motionLength = mMotionEnd - mMotionStart;
                
@@ -518,12 +597,10 @@ public:
             mSgVarV = &(sg->dPdu); break;
          case dPdv:
             mSgVarV = &(sg->dPdv); break;
-#ifdef ARNOLD_4_1_AND_UP
          case dNdx:
             mSgVarV = &(sg->dNdx); break;
          case dNdy:
             mSgVarV = &(sg->dNdy); break;
-#endif
          case dDdx:
             mSgVarV = &(sg->dDdx); break;
          case dDdy:
@@ -651,7 +728,7 @@ class ArnoldUserVar : public SeExprVarRef
 {
 public:
    ArnoldUserVar(const std::string &name)
-      : SeExprVarRef(), mName(name), mIsVecSet(false), mIsVec(false), mSg(0), mType(AI_TYPE_UNDEFINED)
+      : SeExprVarRef(), mName(name.c_str()), mIsVecSet(false), mIsVec(false), mSg(0), mType(AI_TYPE_UNDEFINED)
    {
    }
 
@@ -667,47 +744,47 @@ public:
          value = &tmpVal;
       }
 
-      if (AiUserGetVecFunc(mName.c_str(), mSg, &(value->VEC)))
+      if (AiUserGetVecFunc(mName, mSg, &(value->VEC)))
       {
          mType = AI_TYPE_VECTOR;
          mIsVec = true;
       }
-      else if (AiUserGetFltFunc(mName.c_str(), mSg, &(value->FLT)))
+      else if (AiUserGetFltFunc(mName, mSg, &(value->FLT)))
       {
          mType = AI_TYPE_FLOAT;
          mIsVec = false;
       }
-      else if (AiUserGetPntFunc(mName.c_str(), mSg, &(value->PNT)))
+      else if (AiUserGetPntFunc(mName, mSg, &(value->PNT)))
       {
          mType = AI_TYPE_POINT;
          mIsVec = true;
       }
-      else if (AiUserGetRGBFunc(mName.c_str(), mSg, &(value->RGB)))
+      else if (AiUserGetRGBFunc(mName, mSg, &(value->RGB)))
       {
          mType = AI_TYPE_RGB;
          mIsVec = true;
       }
-      else if (AiUserGetIntFunc(mName.c_str(), mSg, &(value->INT)))
+      else if (AiUserGetIntFunc(mName, mSg, &(value->INT)))
       {
          mType = AI_TYPE_INT;
          mIsVec = false;
       }
-      else if (AiUserGetUIntFunc(mName.c_str(), mSg, &(value->UINT)))
+      else if (AiUserGetUIntFunc(mName, mSg, &(value->UINT)))
       {
          mType = AI_TYPE_UINT;
          mIsVec = false;
       }
-      else if (AiUserGetByteFunc(mName.c_str(), mSg, &(value->BYTE)))
+      else if (AiUserGetByteFunc(mName, mSg, &(value->BYTE)))
       {
          mType = AI_TYPE_BYTE;
          mIsVec = false;
       }
-      else if (AiUserGetPnt2Func(mName.c_str(), mSg, &(value->PNT2)))
+      else if (AiUserGetPnt2Func(mName, mSg, &(value->PNT2)))
       {
          mType = AI_TYPE_POINT2;
          mIsVec = true;
       }
-      else if (AiUserGetRGBAFunc(mName.c_str(), mSg, &(value->RGBA)))
+      else if (AiUserGetRGBAFunc(mName, mSg, &(value->RGBA)))
       {
          mType = AI_TYPE_RGBA;
          mIsVec = true;
@@ -757,7 +834,7 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetByteFunc(mName.c_str(), mSg, &(value.BYTE)))
+                  if (!AiUserGetByteFunc(mName, mSg, &(value.BYTE)))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
@@ -771,7 +848,7 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetIntFunc(mName.c_str(), mSg, &(value.INT)))
+                  if (!AiUserGetIntFunc(mName, mSg, &(value.INT)))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
@@ -785,7 +862,7 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetUIntFunc(mName.c_str(), mSg, &(value.UINT)))
+                  if (!AiUserGetUIntFunc(mName, mSg, &(value.UINT)))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
@@ -799,7 +876,7 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetFltFunc(mName.c_str(), mSg, &(value.FLT)))
+                  if (!AiUserGetFltFunc(mName, mSg, &(value.FLT)))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
@@ -812,7 +889,7 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetPnt2Func(mName.c_str(), mSg, &(value.PNT2)))
+                  if (!AiUserGetPnt2Func(mName, mSg, &(value.PNT2)))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
@@ -825,7 +902,7 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetPntFunc(mName.c_str(), mSg, &(value.PNT)))
+                  if (!AiUserGetPntFunc(mName, mSg, &(value.PNT)))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
@@ -838,7 +915,7 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetVecFunc(mName.c_str(), mSg, &(value.VEC)))
+                  if (!AiUserGetVecFunc(mName, mSg, &(value.VEC)))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
@@ -851,7 +928,7 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetRGBFunc(mName.c_str(), mSg, &(value.RGB)))
+                  if (!AiUserGetRGBFunc(mName, mSg, &(value.RGB)))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
@@ -864,7 +941,7 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetRGBAFunc(mName.c_str(), mSg, &(value.RGBA)))
+                  if (!AiUserGetRGBAFunc(mName, mSg, &(value.RGBA)))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
@@ -901,7 +978,7 @@ public:
 
 protected:
 
-   std::string mName;
+   AtString mName;
    bool mIsVecSet;
    bool mIsVec;
    AtShaderGlobals *mSg;
@@ -999,6 +1076,11 @@ public:
    
    ArnoldExpr(AtNode *n, const std::string &e, bool wantVec=true)
       : SeExpression(e, wantVec), mBound(false), mBoundSg(0), mNode(n)
+   {
+   }
+
+   ArnoldExpr(AtNode *n, AtString e, bool wantVec=true)
+      : SeExpression(e.c_str(), wantVec), mBound(false), mBoundSg(0), mNode(n)
    {
    }
    
@@ -1149,12 +1231,12 @@ private:
 
 node_parameters
 {
-   AiParameterStr("expression", "");
-   AiParameterArray("fparam_name", AiArray(0, 0, AI_TYPE_STRING));
-   AiParameterArray("fparam_value", AiArray(0, 0, AI_TYPE_FLOAT));
-   AiParameterArray("vparam_name", AiArray(0, 0, AI_TYPE_STRING));
-   AiParameterArray("vparam_value", AiArray(0, 0, AI_TYPE_VECTOR));
-   AiParameterBool("stop_on_error", false);
+   AiParameterStr(SSTR::expression, "");
+   AiParameterArray(SSTR::fparam_name, AiArray(0, 0, AI_TYPE_STRING));
+   AiParameterArray(SSTR::fparam_value, AiArray(0, 0, AI_TYPE_FLOAT));
+   AiParameterArray(SSTR::vparam_name, AiArray(0, 0, AI_TYPE_STRING));
+   AiParameterArray(SSTR::vparam_value, AiArray(0, 0, AI_TYPE_VECTOR));
+   AiParameterBool(SSTR::stop_on_error, false);
    AiParameterVec("error_value", 1.0f, 0.0f, 0.0f);
 }
 
@@ -1183,6 +1265,7 @@ node_update
       }
    }
 
+   data->stopOnError = AiNodeGetBool(node, SSTR::stop_on_error);
    data->valid = false;
    data->constant = false;
    data->threadsafe = false;
@@ -1193,11 +1276,11 @@ node_update
    data->value = AI_V3_ZERO;
    data->varindex.clear();
    
-   ArnoldExpr *expr = new ArnoldExpr(node, AiNodeGetStr(node, "expression"), true);
+   ArnoldExpr *expr = new ArnoldExpr(node, AiNodeGetStr(node, SSTR::expression), true);
    
    std::map<std::string, unsigned int>::iterator varit;
    
-   AtArray *fnames = AiNodeGetArray(node, "fparam_name");
+   AtArray *fnames = AiNodeGetArray(node, SSTR::fparam_name);
    data->numfvars = fnames->nelements;
    for (unsigned int i=0; i<fnames->nelements; ++i)
    {
@@ -1219,7 +1302,7 @@ node_update
       }
    }
    
-   AtArray *vnames = AiNodeGetArray(node, "vparam_name");
+   AtArray *vnames = AiNodeGetArray(node, SSTR::vparam_name);
    data->numvvars = vnames->nelements;
    for (unsigned int i=0; i<vnames->nelements; ++i)
    {
@@ -1282,7 +1365,7 @@ node_update
          char tmp[128];
          bool allParamsConstant = true;
          
-         AtArray *fvalues = AiNodeGetArray(node, "fparam_value");
+         AtArray *fvalues = AiNodeGetArray(node, SSTR::fparam_value);
          if (fvalues->nelements != fnames->nelements)
          {
             if (fvalues->nelements < fnames->nelements)
@@ -1309,7 +1392,7 @@ node_update
             }
          }
          
-         AtArray *vvalues = AiNodeGetArray(node, "vparam_value");
+         AtArray *vvalues = AiNodeGetArray(node, SSTR::vparam_value);
          if (vvalues->nelements != vnames->nelements)
          {
             if (vvalues->nelements < vnames->nelements)
@@ -1439,11 +1522,9 @@ shader_evaluate
 {
    NodeData *data = (NodeData*) AiNodeGetLocalData(node);
 
-   bool stopOnError = AiShaderEvalParamBool(p_stop_on_error);
-
    if (!data->valid)
    {
-      if (stopOnError)
+      if (data->stopOnError)
       {
          AiMsgError("[seexpr] Invalid expression");
       }
@@ -1486,7 +1567,7 @@ shader_evaluate
             // if (fvalues->nelements != data->numfvars)
             // {
             //    AiMsgWarning("[seexpr] fparam_name and fparam_value size mismatch (%d for %d)", data->numfvars, fvalues->nelements);
-            //    sg->out.VEC = Failed(sg, node, data, stopOnError, "Invalid float parameters setup");
+            //    sg->out.VEC = Failed(sg, node, data, data->stopOnError, "Invalid float parameters setup");
             //    return;
             // }
 
@@ -1494,19 +1575,19 @@ shader_evaluate
             // if (vvalues->nelements != data->numvvars)
             // {
             //    AiMsgWarning("[seexpr] vparam_name and vparam_value size mismatch (%d for %d)", data->numvvars, vvalues->nelements);
-            //    sg->out.VEC = Failed(sg, node, data, stopOnError, "Invalid vector parameters setup");
+            //    sg->out.VEC = Failed(sg, node, data, data->stopOnError, "Invalid vector parameters setup");
             //    return;
             // }
 
             if (!expr->bindExternals(node, sg))
             {
-               sg->out.VEC = Failed(sg, node, data, stopOnError, "Could not bind external parameters");
+               sg->out.VEC = Failed(sg, node, data, data->stopOnError, "Could not bind external parameters");
                return;
             }
 
             if (!expr->bindShaderParams(fvalues, vvalues))
             {
-               sg->out.VEC = Failed(sg, node, data, stopOnError, "Could not bind external parameters");
+               sg->out.VEC = Failed(sg, node, data, data->stopOnError, "Could not bind external parameters");
                return;
             }
 
@@ -1518,7 +1599,7 @@ shader_evaluate
          }
          else
          {
-            sg->out.VEC = Failed(sg, node, data, stopOnError, "Expression is NULL or invalid");
+            sg->out.VEC = Failed(sg, node, data, data->stopOnError, "Expression is NULL or invalid");
             return;
          }
          

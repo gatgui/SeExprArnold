@@ -17,6 +17,24 @@
 
 extern AtNodeMethods *agSeExprMtd;
 
+namespace SSTR
+{
+   AtString expression("expression");
+   AtString fparam_name("fparam_name");
+   AtString fparam_value("fparam_value");
+   AtString vparam_name("vparam_name");
+   AtString vparam_value("vparam_value");
+   AtString stop_on_error("stop_on_error");
+   AtString linkable("linkable");
+   AtString fps("fps");
+   AtString motion_start_frame("motion_start_frame");
+   AtString motion_end_frame("motion_end_frame");
+   AtString frame("frame");
+   AtString relative_motion_frame("relative_motion_frame");
+   AtString shutter_start("shutter_start");
+   AtString shutter_end("shutter_end");
+}
+
 node_loader
 {
    if (i == 0)
