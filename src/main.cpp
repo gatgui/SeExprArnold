@@ -15,7 +15,7 @@
 #include <ai.h>
 #include <cstring>
 
-extern AtNodeMethods *agSeExprMtd;
+extern AtNodeMethods *SeExprMtd;
 
 namespace SSTR
 {
@@ -42,7 +42,7 @@ node_loader
       node->name = "seexpr";
       node->node_type = AI_NODE_SHADER;
       node->output_type = AI_TYPE_VECTOR;
-      node->methods = agSeExprMtd;
+      node->methods = SeExprMtd;
       strcpy(node->version, AI_VERSION);
       return true;
    }
