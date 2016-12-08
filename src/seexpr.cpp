@@ -1238,11 +1238,6 @@ node_parameters
    AiParameterArray(SSTR::vparam_value, AiArray(0, 0, AI_TYPE_VECTOR));
    AiParameterBool(SSTR::stop_on_error, false);
    AiParameterVec("error_value", 1.0f, 0.0f, 0.0f);
-
-   AiMetaDataSetBool(mds, SSTR::expression, SSTR::linkable, false);
-   AiMetaDataSetBool(mds, SSTR::fparam_name, SSTR::linkable, false);
-   AiMetaDataSetBool(mds, SSTR::vparam_name, SSTR::linkable, false);
-   AiMetaDataSetBool(mds, SSTR::stop_on_error, SSTR::linkable, false);
 }
 
 node_initialize
