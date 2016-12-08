@@ -24,9 +24,9 @@
 #  define AI_MAX_THREADS 64
 #endif
 
-AI_SHADER_NODE_EXPORT_METHODS(agSeExprMtd);
+AI_SHADER_NODE_EXPORT_METHODS(SeExprMtd);
 
-enum agSeExpParams
+enum SeExpParams
 {
    p_expr = 0,
    p_fparam_name,
@@ -37,7 +37,7 @@ enum agSeExpParams
    p_error_value
 };
 
-struct NodeData
+struct SeExprData
 {
    class ArnoldExpr* exprs[AI_MAX_THREADS]; // expression objects array (up to one per thread)
    bool valid;         // whether or not the expression is valid
@@ -1026,7 +1026,7 @@ public:
 
    bool bind(AtNode *node, AtShaderGlobals *)
    {
-      NodeData *data = (NodeData*) AiNodeGetLocalData(node);
+      SeExprData *data = (SeExprData*) AiNodeGetLocalData(node);
       if (data)
       {
          std::map<std::string, unsigned int>::iterator it = data->varindex.find(mName);
@@ -1115,7 +1115,7 @@ public:
       }
       else
       {
-         NodeData *data = (NodeData*) (mNode ? AiNodeGetLocalData(mNode) : 0);
+         SeExprData *data = (SeExprData*) (mNode ? AiNodeGetLocalData(mNode) : 0);
          
          // Note: this code is only called for used variables!
          std::map<std::string, unsigned int>::const_iterator varit = data->varindex.find(name);
@@ -1242,7 +1242,7 @@ node_parameters
 
 node_initialize
 {
-   NodeData *data = new NodeData();
+   SeExprData *data = new SeExprData();
    
    for (int i=0; i<AI_MAX_THREADS; ++i)
    {
@@ -1254,7 +1254,7 @@ node_initialize
 
 node_update
 {
-   NodeData *data = (NodeData*) AiNodeGetLocalData(node);
+   SeExprData *data = (SeExprData*) AiNodeGetLocalData(node);
 
    for (int i=0; i<AI_MAX_THREADS; ++i)
    {
@@ -1480,7 +1480,7 @@ node_update
 
 node_finish
 {
-   NodeData *data = (NodeData*) AiNodeGetLocalData(node);
+   SeExprData *data = (SeExprData*) AiNodeGetLocalData(node);
    
    for (int i=0; i<AI_MAX_THREADS; ++i)
    {
@@ -1498,7 +1498,7 @@ node_finish
    delete data;
 }
 
-static AtVector Failed(AtShaderGlobals *sg, AtNode *node, NodeData *data, bool stopOnError, const char *errMsg=0)
+static AtVector Failed(AtShaderGlobals *sg, AtNode *node, SeExprData *data, bool stopOnError, const char *errMsg=0)
 {
    if (!data->threadsafe)
    {
@@ -1520,7 +1520,7 @@ static AtVector Failed(AtShaderGlobals *sg, AtNode *node, NodeData *data, bool s
 
 shader_evaluate
 {
-   NodeData *data = (NodeData*) AiNodeGetLocalData(node);
+   SeExprData *data = (SeExprData*) AiNodeGetLocalData(node);
 
    if (!data->valid)
    {
