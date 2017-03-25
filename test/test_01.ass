@@ -55,7 +55,7 @@ standard
 seexpr
 {
    name expr1
-   expression "$user::noise_scale * $amp * voronoi($freq * ($offset + $user::noise_offset + $sg::P), 2)"
+   expression "$user_f::noise_scale * $amp * voronoi($freq * ($offset + $user_v::noise_offset + $sg::P), 2)"
    fparam_name 2 1 STRING "freq" "amp"
    fparam_value 2 1 FLOAT 10 0.5
    vparam_name "offset"

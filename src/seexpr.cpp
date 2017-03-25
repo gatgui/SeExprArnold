@@ -13,16 +13,13 @@
 // limitations under the License.
 
 #include <ai.h>
-#include <SeExpression.h>
+#include <SeExpr2/Expression.h>
+#include <SeExpr2/VarBlock.h>
 #include <cstring>
 #include <cstdio>
 #include <map>
 #include <vector>
 #include <string>
-
-#ifndef AI_MAX_THREADS
-#  define AI_MAX_THREADS 64
-#endif
 
 AI_SHADER_NODE_EXPORT_METHODS(SeExprMtd);
 
@@ -39,7 +36,7 @@ enum SeExpParams
 
 struct SeExprData
 {
-   class ArnoldExpr* exprs[AI_MAX_THREADS]; // expression objects array (up to one per thread)
+   class ArnoldExpr** exprs; // expression objects array (up to one per thread)
    bool valid;         // whether or not the expression is valid
    bool constant;      // whether or not the expression is constant (use value member)
    bool threadsafe;    // whether or not the expression is thread safe
@@ -50,6 +47,12 @@ struct SeExprData
    unsigned int numvvars;
    std::map<std::string, unsigned int> varindex;
    bool stopOnError;
+
+   int nthreads;
+   SeExpr2::VarBlockCreator* varBlockCreator;
+   int outputIndex;
+   double *outputData;
+   SeExpr2::VarBlock** varBlocks;
 };
 
 namespace SSTR
@@ -72,7 +75,7 @@ namespace SSTR
 
 // ---
 
-class ArnoldSgVar : public SeExprVarRef
+class ArnoldSgVar : public SeExpr2::ExprVarRef
 {
 public:
    enum
@@ -284,32 +287,64 @@ public:
    }
 
    ArnoldSgVar(int which)
-      : SeExprVarRef(), mWhich(which), mIsVec(false)
-      , mSgVarF(0), mSgVarV(0), mSgVarI(0), mSgVarD(0)
-      , mFrame(0.0f), mFPS(24.0f)
-      , mMotionStart(0.0f), mMotionEnd(0.0f)
-      , mSampleFrame(0.0f), mTime(0)
-      , mShutterOpenTime(0.0f), mShutterCloseTime(0.0f)
-      , mShutterOpenFrame(0.0f), mShutterCloseFrame(0.0f)
+      : SeExpr2::ExprVarRef(SeExpr2::ExprType().Error().Varying())
+      , mWhich(which)
+      , mIsVec(false)
+      , mSgVarF(0)
+      , mSgVarV(0)
+      , mSgVarI(0)
+      , mSgVarD(0)
+      , mFrame(0.0f)
+      , mFPS(24.0f)
+      , mMotionStart(0.0f)
+      , mMotionEnd(0.0f)
+      , mSampleFrame(0.0f)
+      , mTime(0)
+      , mShutterOpenTime(0.0f)
+      , mShutterCloseTime(0.0f)
+      , mShutterOpenFrame(0.0f)
+      , mShutterCloseFrame(0.0f)
    {
       if (mWhich < 0 || mWhich >= undefined)
       {
          mWhich = undefined;
+      }
+      else
+      {
+         mIsVec = (mWhich <= vecmax);
+         setType(SeExpr2::ExprType().FP(mIsVec ? 3 : 1).Varying());
       }
       initOptionsVar();
       initCameraVar();
    }
 
    ArnoldSgVar(const std::string &name)
-      : SeExprVarRef(), mWhich(undefined), mIsVec(false)
-      , mSgVarF(0), mSgVarV(0), mSgVarI(0), mSgVarD(0), mSgVarB(0), mSgVarC(0)
-      , mFrame(0.0f), mFPS(24.0f)
-      , mMotionStart(0.0f), mMotionEnd(0.0f)
-      , mSampleFrame(0.0f), mTime(0)
-      , mShutterOpenTime(0.0f), mShutterCloseTime(0.0f)
-      , mShutterOpenFrame(0.0f), mShutterCloseFrame(0.0f)
+      : SeExpr2::ExprVarRef(SeExpr2::ExprType().Error().Varying())
+      , mWhich(undefined)
+      , mIsVec(false)
+      , mSgVarF(0)
+      , mSgVarV(0)
+      , mSgVarI(0)
+      , mSgVarD(0)
+      , mSgVarB(0)
+      , mSgVarC(0)
+      , mFrame(0.0f)
+      , mFPS(24.0f)
+      , mMotionStart(0.0f)
+      , mMotionEnd(0.0f)
+      , mSampleFrame(0.0f)
+      , mTime(0)
+      , mShutterOpenTime(0.0f)
+      , mShutterCloseTime(0.0f)
+      , mShutterOpenFrame(0.0f)
+      , mShutterCloseFrame(0.0f)
    {
       mWhich = NameToEnum(name);
+      if (mWhich != undefined)
+      {
+         mIsVec = (mWhich <= vecmax);
+         setType(SeExpr2::ExprType().FP(mIsVec ? 3 : 1).Varying());
+      }
       initOptionsVar();
       initCameraVar();
    }
@@ -317,13 +352,13 @@ public:
    virtual ~ArnoldSgVar()
    {
    }
-   
-   virtual bool isVec()
+
+   virtual void eval(const char **)
    {
-      return (mWhich >= vecmin && mWhich <= vecmax);
+      assert(false);
    }
 
-   virtual void eval(const SeExprVarNode*, SeVec3d& result)
+   virtual void eval(double *result)
    {
       if (mWhich == sample_frame)
       {
@@ -339,40 +374,44 @@ public:
       
       if (mSgVarV)
       {
-         result.setValue(mSgVarV->x, mSgVarV->y, mSgVarV->z);
+         result[0] = mSgVarV->x;
+         result[1] = mSgVarV->y;
+         result[2] = mSgVarV->z;
       }
       else if (mSgVarC)
       {
-         result.setValue(mSgVarC->r, mSgVarC->g, mSgVarC->b);
+         result[0] = mSgVarC->r;
+         result[1] = mSgVarC->g;
+         result[2] = mSgVarC->b;
       }
       else if (mSgVarF)
       {
-         float val = *mSgVarF;
-         result.setValue(val, val, val);
+         result[0] = double(*mSgVarF);
       }
       else if (mSgVarD)
       {
-         double val = *mSgVarD;
-         result.setValue(val, val, val);
+         result[0] = *mSgVarD;
       }
       else if (mSgVarI)
       {
-         float val = float(*mSgVarI);
-         result.setValue(val, val, val);
+         result[0] = double(*mSgVarI);
       }
       else if (mSgVarU16)
       {
-         float val = float(*mSgVarU16);
-         result.setValue(val, val, val);
+         result[0] = double(*mSgVarU16);
       }
       else if (mSgVarB)
       {
-         float val = float(*mSgVarB);
-         result.setValue(val, val, val);
+         result[0] = double(*mSgVarB);
       }
       else
       {
-         result.setValue(0.0f, 0.0f, 0.0f);
+         result[0] = 0.0;
+         if (mIsVec)
+         {
+            result[1] = 0.0;
+            result[2] = 0.0;
+         }
       }
    }
    
@@ -724,12 +763,37 @@ protected:
 };
 
 
-class ArnoldUserVar : public SeExprVarRef
+class ArnoldUserVar : public SeExpr2::ExprVarRef
 {
 public:
-   ArnoldUserVar(const std::string &name)
-      : SeExprVarRef(), mName(name.c_str()), mIsVecSet(false), mIsVec(false), mSg(0), mType(AI_TYPE_UNDEFINED)
+   enum
    {
+      Float = 0,
+      Vector,
+      String
+   };
+
+   ArnoldUserVar(const std::string &name, int type=Float)
+      : SeExpr2::ExprVarRef(SeExpr2::ExprType().Error().Varying())
+      , mName(name.c_str())
+      , mIsVec(false)
+      , mSg(0)
+      , mType(AI_TYPE_UNDEFINED)
+   {
+      switch (type)
+      {
+      case Float:
+         setType(SeExpr2::ExprType().FP(1).Varying());
+         break;
+      case Vector:
+         setType(SeExpr2::ExprType().FP(3).Varying());
+         mIsVec = true;
+         break;
+      case String:
+         setType(SeExpr2::ExprType().String().Varying());
+      default:
+         break;
+      }
    }
 
    virtual ~ArnoldUserVar()
@@ -744,78 +808,97 @@ public:
          value = &tmpVal;
       }
 
-      if (AiUserGetVecFunc(mName, mSg, &(value->VEC)))
+      if (AiUserGetRGBAFunc(mName, mSg, &(value->RGBA)))
       {
-         mType = AI_TYPE_VECTOR;
-         mIsVec = true;
-      }
-      else if (AiUserGetFltFunc(mName, mSg, &(value->FLT)))
-      {
-         mType = AI_TYPE_FLOAT;
-         mIsVec = false;
-      }
-      else if (AiUserGetPntFunc(mName, mSg, &(value->PNT)))
-      {
-         mType = AI_TYPE_POINT;
-         mIsVec = true;
+         mType = AI_TYPE_RGBA;
       }
       else if (AiUserGetRGBFunc(mName, mSg, &(value->RGB)))
       {
          mType = AI_TYPE_RGB;
-         mIsVec = true;
       }
-      else if (AiUserGetIntFunc(mName, mSg, &(value->INT)))
+      else if (AiUserGetVecFunc(mName, mSg, &(value->VEC)))
       {
-         mType = AI_TYPE_INT;
-         mIsVec = false;
+         mType = AI_TYPE_VECTOR;
       }
-      else if (AiUserGetUIntFunc(mName, mSg, &(value->UINT)))
+      else if (AiUserGetPntFunc(mName, mSg, &(value->PNT)))
       {
-         mType = AI_TYPE_UINT;
-         mIsVec = false;
-      }
-      else if (AiUserGetByteFunc(mName, mSg, &(value->BYTE)))
-      {
-         mType = AI_TYPE_BYTE;
-         mIsVec = false;
+         mType = AI_TYPE_POINT;
       }
       else if (AiUserGetPnt2Func(mName, mSg, &(value->PNT2)))
       {
          mType = AI_TYPE_POINT2;
-         mIsVec = true;
       }
-      else if (AiUserGetRGBAFunc(mName, mSg, &(value->RGBA)))
+      else if (AiUserGetFltFunc(mName, mSg, &(value->FLT)))
       {
-         mType = AI_TYPE_RGBA;
-         mIsVec = true;
+         mType = AI_TYPE_FLOAT;
+      }
+      else if (AiUserGetIntFunc(mName, mSg, &(value->INT)))
+      {
+         mType = AI_TYPE_INT;
+      }
+      else if (AiUserGetUIntFunc(mName, mSg, &(value->UINT)))
+      {
+         mType = AI_TYPE_UINT;
+      }
+      else if (AiUserGetByteFunc(mName, mSg, &(value->BYTE)))
+      {
+         mType = AI_TYPE_BYTE;
+      }
+      else if (AiUserGetStrFunc(mName, mSg, &(value->STR)))
+      {
+         mType = AI_TYPE_STRING;
       }
       else
       {
          mType = AI_TYPE_UNDEFINED;
-         mIsVec = false;
       }
-
-      mIsVecSet = true;
    }
 
-   virtual bool isVec()
+   virtual void eval(const char **result)
    {
-      if (mIsVecSet)
+      if (mSg)
       {
-         return mIsVec;
-      }
-      else if (mSg)
-      {
-         _updateType();
-         return mIsVec;
+         bool queryVal = true;
+         AtParamValue value;
+
+         if (mType == AI_TYPE_UNDEFINED)
+         {
+            _updateType(&value);
+            queryVal = false;
+         }
+
+         if (mType == AI_TYPE_STRING)
+         {
+            if (queryVal)
+            {
+               if (!AiUserGetStrFunc(mName, mSg, &(value.STR)))
+               {
+                  AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
+               }
+               else
+               {
+                  result[0] = value.STR;
+                  return;
+               }
+            }
+            else
+            {
+               result[0] = value.STR;
+               return;
+            }
+         }
+
+         AiMsgWarning("[seexpr] Unsupported type for user variable \"%s\"", mName.c_str());
       }
       else
       {
-         return false;
+         AiMsgWarning("[seexpr] Cannot evaluate user variable \"%s\"", mName.c_str());
       }
+
+      result[0] = "";
    }
 
-   virtual void eval(const SeExprVarNode*, SeVec3d& result)
+   virtual void eval(double *result)
    {
       if (mSg)
       {
@@ -841,7 +924,12 @@ public:
                   }
                }
                float v = float(value.BYTE);
-               result.setValue(v, v, v);
+               result[0] = v;
+               if (mIsVec)
+               {
+                  result[1] = v;
+                  result[2] = v;
+               }
                return;
             }
          case AI_TYPE_INT:
@@ -855,7 +943,12 @@ public:
                   }
                }
                float v = float(value.INT);
-               result.setValue(v, v, v);
+               result[0] = v;
+               if (mIsVec)
+               {
+                  result[1] = v;
+                  result[2] = v;
+               }
                return;
             }
          case AI_TYPE_UINT:
@@ -869,7 +962,12 @@ public:
                   }
                }
                float v = float(value.UINT);
-               result.setValue(v, v, v);
+               result[0] = v;
+               if (mIsVec)
+               {
+                  result[1] = v;
+                  result[2] = v;
+               }
                return;
             }
          case AI_TYPE_FLOAT:
@@ -882,7 +980,12 @@ public:
                      break;
                   }
                }
-               result.setValue(value.FLT, value.FLT, value.FLT);
+               result[0] = value.FLT;
+               if (mIsVec)
+               {
+                  result[1] = value.FLT;
+                  result[2] = value.FLT;
+               }
                return;
             }
          case AI_TYPE_POINT2:
@@ -895,7 +998,12 @@ public:
                      break;
                   }
                }
-               result.setValue(value.PNT2.x, value.PNT2.y, 0.0f);
+               result[0] = value.PNT2.x;
+               if (mIsVec)
+               {
+                  result[1] = value.PNT2.y;
+                  result[2] = 0.0;
+               }
                return;
             }
          case AI_TYPE_POINT:
@@ -908,7 +1016,12 @@ public:
                      break;
                   }
                }
-               result.setValue(value.PNT.x, value.PNT.y, value.PNT.z);
+               result[0] = value.PNT.x;
+               if (mIsVec)
+               {
+                  result[1] = value.PNT.y;
+                  result[2] = value.PNT.z;
+               }
                return;
             }
          case AI_TYPE_VECTOR:
@@ -921,7 +1034,12 @@ public:
                      break;
                   }
                }
-               result.setValue(value.VEC.x, value.VEC.y, value.VEC.z);
+               result[0] = value.VEC.x;
+               if (mIsVec)
+               {
+                  result[1] = value.VEC.y;
+                  result[2] = value.VEC.z;
+               }
                return;
             }
          case AI_TYPE_RGB:
@@ -934,7 +1052,12 @@ public:
                      break;
                   }
                }
-               result.setValue(value.RGB.r, value.RGB.g, value.RGB.b);
+               result[0] = value.RGB.r;
+               if (mIsVec)
+               {
+                  result[1] = value.RGB.g;
+                  result[2] = value.RGB.b;
+               }
                return;
             }
          case AI_TYPE_RGBA:
@@ -947,7 +1070,12 @@ public:
                      break;
                   }
                }
-               result.setValue(value.RGBA.r, value.RGBA.g, value.RGBA.b);
+               result[0] = value.RGBA.r;
+               if (mIsVec)
+               {
+                  result[1] = value.RGBA.g;
+                  result[2] = value.RGBA.b;
+               }
                return;
             }
          default:
@@ -960,14 +1088,19 @@ public:
       {
          AiMsgWarning("[seexpr] Cannot evaluate user variable \"%s\"", mName.c_str());
       }
-      
-      result.setValue(0.0f, 0.0f, 0.0f);
+
+      result[0] = 0.0;
+      if (mIsVec)
+      {
+         result[1] = 0.0;
+         result[2] = 0.0;
+      }
    }
 
    bool bind(AtNode *, AtShaderGlobals *sg)
    {
       mSg = sg;
-      mIsVecSet = false;
+      mType = AI_TYPE_UNDEFINED;
       return true;
    }
 
@@ -979,18 +1112,21 @@ public:
 protected:
 
    AtString mName;
-   bool mIsVecSet;
    bool mIsVec;
    AtShaderGlobals *mSg;
    int mType;
 };
 
 
-class ArnoldShaderVar : public SeExprVarRef
+class ArnoldShaderVar : public SeExpr2::ExprVarRef
 {
 public:
    ArnoldShaderVar(const std::string &name, bool isVec=false)
-      : SeExprVarRef(), mName(name), mIsVec(isVec), mIndex(0), mValues(0)
+      : SeExpr2::ExprVarRef(SeExpr2::ExprType().FP(isVec ? 3 : 1).Varying())
+      , mName(name)
+      , mIsVec(isVec)
+      , mIndex(0)
+      , mValues(0)
    {
    }
 
@@ -998,29 +1134,36 @@ public:
    {
    }
 
-   virtual bool isVec()
+   virtual void eval(const char **)
    {
-      return mIsVec;
+      assert(false);
    }
 
-   virtual void eval(const SeExprVarNode*, SeVec3d& result)
+   virtual void eval(double *result)
    {
       if (mValues && mIndex < mValues->nelements)
       {
          if (mIsVec)
          {
             AtVector v = AiArrayGetVec(mValues, mIndex);
-            result.setValue(v.x, v.y, v.z);
+            result[0] = v.x;
+            result[1] = v.y;
+            result[2] = v.z;
          }
          else
          {
             float v = AiArrayGetFlt(mValues, mIndex);
-            result.setValue(v, v, v);
+            result[0] = v;
          }
       }
       else
       {
-         result.setValue(0.0f, 0.0f, 0.0f);
+         result[0] = 0.0;
+         if (mIsVec)
+         {
+            result[1] = 0.0;
+            result[2] = 0.0;
+         }
       }
    }
 
@@ -1065,22 +1208,33 @@ protected:
 };
 
 
-class ArnoldExpr : public SeExpression
+class ArnoldExpr : public SeExpr2::Expression
 {
 public:
    
    ArnoldExpr()
-      : SeExpression(), mBound(false), mBoundSg(0), mNode(0)
+      : SeExpr2::Expression()
+      , mBound(false)
+      , mBoundSg(0)
+      , mNode(0)
    {
    }
    
-   ArnoldExpr(AtNode *n, const std::string &e, bool wantVec=true)
-      : SeExpression(e, wantVec), mBound(false), mBoundSg(0), mNode(n)
+   ArnoldExpr(AtNode *n, const std::string &e)
+      : SeExpr2::Expression(e)
+      , mBound(false)
+      , mBoundSg(0)
+      , mNode(n)
    {
+      
+      // should all all sg vars here to avoid runtime access
    }
 
-   ArnoldExpr(AtNode *n, AtString e, bool wantVec=true)
-      : SeExpression(e.c_str(), wantVec), mBound(false), mBoundSg(0), mNode(n)
+   ArnoldExpr(AtNode *n, AtString e)
+      : SeExpr2::Expression(e.c_str())
+      , mBound(false)
+      , mBoundSg(0)
+      , mNode(n)
    {
    }
    
@@ -1089,7 +1243,7 @@ public:
       clearExternals();
    }
    
-   virtual SeExprVarRef* resolveVar(const std::string& name) const
+   virtual SeExpr2::ExprVarRef* resolveVar(const std::string& name) const
    {
       if (name.length() >= 4 && !strncmp(name.c_str(), "sg::", 4))
       {
@@ -1099,6 +1253,7 @@ public:
          if (var->which() == ArnoldSgVar::undefined)
          {
             AiMsgWarning("[seexpr] Unsupported shader globals \"%s\"", sgname.c_str());
+            return 0;
          }
          else
          {
@@ -1108,35 +1263,65 @@ public:
       }
       else if (name.length() >= 6 && !strncmp(name.c_str(), "user::", 6))
       {
+         // without any further specification, use broad vector type
          std::string uname = name.substr(6);
-         ArnoldUserVar *var = new ArnoldUserVar(uname);
+         ArnoldUserVar *var = new ArnoldUserVar(uname, ArnoldUserVar::Vector);
          mUserVars.push_back(var);
+         return var;
+      }
+      else if (name.length() >= 8 && !strncmp(name.c_str(), "user_", 5))
+      {
+         // new type specific prefices for user attributes
+         //   user_v:: -> Float[3]
+         //   user_f:: -> Float
+         //   user_s:: -> String
+         if (!strncmp(name.c_str() + 5, "f::", 3))
+         {
+            std::string uname = name.substr(8);
+            ArnoldUserVar *var = new ArnoldUserVar(uname, ArnoldUserVar::Float);
+            mUserVars.push_back(var);
+            return var;
+         }
+         else if (!strncmp(name.c_str() + 5, "v::", 3))
+         {
+            std::string uname = name.substr(8);
+            ArnoldUserVar *var = new ArnoldUserVar(uname, ArnoldUserVar::Vector);
+            mUserVars.push_back(var);
+            return var;
+         }
+         else if (!strncmp(name.c_str() + 5, "s::", 3))
+         {
+            std::string uname = name.substr(8);
+            ArnoldUserVar *var = new ArnoldUserVar(uname, ArnoldUserVar::String);
+            mUserVars.push_back(var);
+            return var;
+         }
+      }
+
+      SeExprData *data = (SeExprData*) (mNode ? AiNodeGetLocalData(mNode) : 0);
+      
+      // Note: this code is only called for used variables!
+      std::map<std::string, unsigned int>::const_iterator varit = data->varindex.find(name);
+      if (varit != data->varindex.end())
+      {
+         ArnoldShaderVar *var = new ArnoldShaderVar(name, (data ? varit->second >= data->numfvars : false));
+         mShaderVars.push_back(var);
          return var;
       }
       else
       {
-         SeExprData *data = (SeExprData*) (mNode ? AiNodeGetLocalData(mNode) : 0);
-         
-         // Note: this code is only called for used variables!
-         std::map<std::string, unsigned int>::const_iterator varit = data->varindex.find(name);
-         if (varit != data->varindex.end())
-         {
-            ArnoldShaderVar *var = new ArnoldShaderVar(name, (data ? varit->second >= data->numfvars : false));
-            mShaderVars.push_back(var);
-            return var;
-         }
-         else
-         {
-            AiMsgWarning("[seexpr] Unknown variable \"%s\"", name.c_str());
-         }
+         AiMsgWarning("[seexpr] Unknown variable \"%s\"", name.c_str());
+         return 0;
       }
-      return 0;
    }
    
-   virtual SeExprFunc* resolveFunc(const std::string&) const
+   virtual SeExpr2::ExprFunc* resolveFunc(const std::string&) const
    {
       return 0;
    }
+
+   // Note: resolveVar, resolveFunc are called when compiling the function
+   //       or is that fhe first time the function is run???
 
    bool bindExternals(AtNode *node, AtShaderGlobals *sg)
    {
@@ -1243,11 +1428,13 @@ node_parameters
 node_initialize
 {
    SeExprData *data = new SeExprData();
-   
-   for (int i=0; i<AI_MAX_THREADS; ++i)
-   {
-      data->exprs[i] = 0;
-   }
+
+   data->varBlockCreator = new SeExpr2::VarBlockCreator();
+   data->outputIndex = data->varBlockCreator->registerVariable("__output", SeExpr2::ExprType().FP(3).Varying());
+
+   data->nthreads = 0;
+   data->exprs = 0;
+   data->outputData = 0;
 
    AiNodeSetLocalData(node, (void*)data);
 }
@@ -1256,13 +1443,29 @@ node_update
 {
    SeExprData *data = (SeExprData*) AiNodeGetLocalData(node);
 
-   for (int i=0; i<AI_MAX_THREADS; ++i)
+   int nthreads = AiNodeGetInt(AiUniverseGetOptions(), "threads");
+
+   if (data->nthreads > 0)
    {
-      if (data->exprs[i])
+      for (int i=0; i<data->nthreads; ++i)
       {
-         delete data->exprs[i];
-         data->exprs[i] = 0;
+         if (data->exprs[i])
+         {
+            delete data->exprs[i];
+         }
+         if (data->varBlocks[i])
+         {
+            delete data->varBlocks[i];
+         }
       }
+
+      delete[] data->exprs;
+      delete[] data->varBlocks;
+      delete[] data->outputData;
+
+      data->exprs = 0;
+      data->varBlocks = 0;
+      data->outputData = 0;
    }
 
    data->stopOnError = AiNodeGetBool(node, SSTR::stop_on_error);
@@ -1275,9 +1478,23 @@ node_update
    data->numvvars = 0;
    data->value = AI_V3_ZERO;
    data->varindex.clear();
-   
-   ArnoldExpr *expr = new ArnoldExpr(node, AiNodeGetStr(node, SSTR::expression), true);
-   
+   data->nthreads = nthreads;
+   data->exprs = new ArnoldExpr*[nthreads];
+   data->varBlocks = new SeExpr2::VarBlock*[nthreads];
+   data->outputData = new double[3 * nthreads];
+
+   ArnoldExpr *expr = new ArnoldExpr(node, AiNodeGetStr(node, SSTR::expression));
+   // always vector for now
+   expr->setDesiredReturnType(SeExpr2::ExprType().FP(3).Varying());
+   expr->setVarBlockCreator(data->varBlockCreator); // is this required?
+
+   for (unsigned int tid=0, offset=0; tid<nthreads; ++tid, offset+=3)
+   {
+      data->exprs[tid] = 0;
+      data->varBlocks[tid] = new SeExpr2::VarBlock(data->varBlockCreator->create());
+      data->varBlocks[tid]->Pointer(data->outputIndex) = data->outputData + offset;
+   }
+
    std::map<std::string, unsigned int>::iterator varit;
    
    AtArray *fnames = AiNodeGetArray(node, SSTR::fparam_name);
@@ -1344,14 +1561,16 @@ node_update
          {
             data->valid = true;
             // Do not need to bind externals
-            SeVec3d v = expr->evaluate();
-            data->value.x = float(v[0]);
-            data->value.y = float(v[1]);
-            data->value.z = float(v[2]);
+
+            expr->evalMultiple(data->varBlocks[0], data->outputIndex, 0, 1);
+            
+            data->value.x = data->outputData[0];
+            data->value.y = data->outputData[1];
+            data->value.z = data->outputData[2];
          }
          else
          {
-            AiMsgWarning("[seexpr] %s", expr->parseError().c_str());
+            AiMsgWarning("[seexpr] Invalid expression (%s)", expr->parseError().c_str());
          }
          
          delete expr;
@@ -1460,14 +1679,14 @@ node_update
       }
       else
       {
-         AiMsgWarning("[seexpr] %s", expr->parseError().c_str());
+         AiMsgWarning("[seexpr] Invalid expression (%s)", expr->parseError().c_str());
          delete expr;
       }
    }
    else
    {
       //AiMsgError("[seexpr] %s", expr->parseError().c_str());
-      AiMsgWarning("[seexpr] %s", expr->parseError().c_str());
+      AiMsgWarning("[seexpr] Syntax error (%s)", expr->parseError().c_str());
       delete expr;
    }
    
@@ -1482,13 +1701,26 @@ node_finish
 {
    SeExprData *data = (SeExprData*) AiNodeGetLocalData(node);
    
-   for (int i=0; i<AI_MAX_THREADS; ++i)
+   if (data->nthreads > 0)
    {
-      if (data->exprs[i])
+      for (int i=0; i<data->nthreads; ++i)
       {
-         delete data->exprs[i];
+         if (data->exprs[i])
+         {
+            delete data->exprs[i];
+         }
+         if (data->varBlocks[i])
+         {
+            delete data->varBlocks[i];
+         }
       }
+
+      delete[] data->exprs;
+      delete[] data->varBlocks;
+      delete[] data->outputData;
    }
+
+   delete data->varBlockCreator;
 
    if (!data->threadsafe && data->mutex)
    {
@@ -1591,11 +1823,13 @@ shader_evaluate
                return;
             }
 
-            SeVec3d v = expr->evaluate();
+            expr->evalMultiple(data->varBlocks[sg->tid], data->outputIndex, 0, 1);
             
-            rv.x = float(v[0]);
-            rv.y = float(v[1]);
-            rv.z = float(v[2]);
+            unsigned int outputDataOffset = 3 * sg->tid;
+
+            rv.x = data->outputData[outputDataOffset + 0];
+            rv.y = data->outputData[outputDataOffset + 1];
+            rv.z = data->outputData[outputDataOffset + 2];
          }
          else
          {
