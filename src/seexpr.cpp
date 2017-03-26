@@ -53,6 +53,7 @@ struct SeExprData
    int outputIndex;
    double *outputData;
    SeExpr2::VarBlock** varBlocks;
+   std::string source;
 };
 
 namespace SSTR
@@ -1226,7 +1227,7 @@ public:
       , mBoundSg(0)
       , mNode(n)
    {
-      
+
       // should all all sg vars here to avoid runtime access
    }
 
@@ -1482,8 +1483,9 @@ node_update
    data->exprs = new ArnoldExpr*[nthreads];
    data->varBlocks = new SeExpr2::VarBlock*[nthreads];
    data->outputData = new double[3 * nthreads];
+   data->source = AiNodeGetStr(node, SSTR::expression);
 
-   ArnoldExpr *expr = new ArnoldExpr(node, AiNodeGetStr(node, SSTR::expression));
+   ArnoldExpr *expr = new ArnoldExpr(node, data->source);
    // always vector for now
    expr->setDesiredReturnType(SeExpr2::ExprType().FP(3).Varying());
    expr->setVarBlockCreator(data->varBlockCreator); // is this required?
@@ -1541,9 +1543,10 @@ node_update
          data->varindex[var] = data->numfvars + i;
       }
    }
-   
-   if (expr->syntaxOK())
+
+   if (expr->isValid())
    {
+      data->valid = true;
       data->threadsafe = expr->isThreadSafe();
       if (!data->threadsafe)
       {
@@ -1556,29 +1559,18 @@ node_update
          // No vars or func reference (implies threadsafe)
          data->constant = true;
          data->sgdependent = false;
-         
-         if (expr->isValid())
-         {
-            data->valid = true;
-            // Do not need to bind externals
 
-            expr->evalMultiple(data->varBlocks[0], data->outputIndex, 0, 1);
-            
-            data->value.x = data->outputData[0];
-            data->value.y = data->outputData[1];
-            data->value.z = data->outputData[2];
-         }
-         else
-         {
-            AiMsgWarning("[seexpr] Invalid expression (%s)", expr->parseError().c_str());
-         }
+         // Do not need to bind externals
+         expr->evalMultiple(data->varBlocks[0], data->outputIndex, 0, 1);
+         
+         data->value.x = data->outputData[0];
+         data->value.y = data->outputData[1];
+         data->value.z = data->outputData[2];
          
          delete expr;
       }
-      else if (expr->isValid())
+      else
       {
-         data->valid = true;
-         
          // Check if expression's input are all constant
          
          char tmp[128];
@@ -1677,16 +1669,10 @@ node_update
             delete expr;
          }
       }
-      else
-      {
-         AiMsgWarning("[seexpr] Invalid expression (%s)", expr->parseError().c_str());
-         delete expr;
-      }
    }
    else
    {
-      //AiMsgError("[seexpr] %s", expr->parseError().c_str());
-      AiMsgWarning("[seexpr] Syntax error (%s)", expr->parseError().c_str());
+      AiMsgWarning("[seexpr] Invalid expression (%s)", expr->parseError().c_str());
       delete expr;
    }
    
@@ -1788,7 +1774,7 @@ shader_evaluate
             expr = data->exprs[sg->tid];
             if (!expr)
             {
-               expr = new ArnoldExpr(node, AiShaderEvalParamStr(p_expr));
+               expr = new ArnoldExpr(node, data->source);
                data->exprs[sg->tid] = expr;   
             }
          }
