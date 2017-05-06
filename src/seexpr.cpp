@@ -897,7 +897,7 @@ public:
       }
       else
       {
-         AiMsgWarning("[seexpr] Cannot evaluate user variable \"%s\"", mName.c_str());
+         AiMsgWarning("[seexpr] Cannot evaluate user variable \"%s\": No shading globals bound yet.", mName.c_str());
       }
 
       result[0] = "";
@@ -1091,7 +1091,7 @@ public:
       }
       else
       {
-         AiMsgWarning("[seexpr] Cannot evaluate user variable \"%s\"", mName.c_str());
+         AiMsgWarning("[seexpr] Cannot evaluate user variable \"%s\": No shading globals bound yet.", mName.c_str());
       }
 
       result[0] = 0.0;
