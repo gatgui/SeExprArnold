@@ -17,10 +17,8 @@ excons.SetArgument("use-c++11", 1)
 if sys.platform != "win32":
   env.Append(CPPFLAGS=" -Wno-unused-parameter")
 
-#excons.Call("SeExpr", overrides={"static": 1})
+excons.Call("SeExpr")
 
-#ARGUMENTS["static"] = "1"
-SConscript("SeExpr/SConstruct")
 Import("RequireSeExpr2")
 
 prjs = [
@@ -29,9 +27,6 @@ prjs = [
    "type"    : "dynamicmodule",
    "ext"     : arnold.PluginExt(),
    "srcs"    : glob.glob("src/*.cpp"),
-   #"incdirs" : ["SeExpr/src"],
-   #"defs"    : ["SEEXPR_WIN32"] if sys.platform == "win32" else [],
-   #"libs"    : ["SeExpr2"],
    "install" : {"arnold": ["src/seexpr.mtd"],
                 "maya": ["maya/aiSeexprTemplate.py"]},
    "custom"  : [arnold.Require, RequireSeExpr2]
@@ -40,4 +35,3 @@ prjs = [
 
 excons.DeclareTargets(env, prjs)
 
-Default("seexpr")
