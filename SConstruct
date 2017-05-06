@@ -3,6 +3,9 @@ import glob
 import excons
 from excons.tools import arnold
 
+
+env = excons.MakeBaseEnv()
+
 arniver = arnold.Version(asString=False)
 if arniver[0] < 4 or (arniver[0] == 4 and (arniver[1] < 2 or (arniver[1] == 2 and arniver[2] < 12))):
   print("SeExprArnold requires at least Arnold 4.2.12.2")
@@ -10,8 +13,6 @@ if arniver[0] < 4 or (arniver[0] == 4 and (arniver[1] < 2 or (arniver[1] == 2 an
 
 # SeExpr v3 requires c++11
 excons.SetArgument("use-c++11", 1)
-
-env = excons.MakeBaseEnv()
 
 if sys.platform != "win32":
   env.Append(CPPFLAGS=" -Wno-unused-parameter")
