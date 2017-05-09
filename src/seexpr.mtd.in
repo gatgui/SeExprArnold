@@ -1,6 +1,7 @@
-[node seexpr]
+[node @PREFIX@seexpr]
    maya.classification STRING "utility/general"
    maya.id INT 0x001165FF
+   maya.name STRING @SEEXPR_MAYA_NODENAME@
    
    [attr expression]
       linkable BOOL false
