@@ -29,7 +29,7 @@ if sys.platform != "win32":
 excons.Call("SeExpr")
 
 prjs = [
-  {"name"    : "seexpr",
+  {"name"    : name,
    "prefix"  : "arnold",
    "type"    : "dynamicmodule",
    "ext"     : arnold.PluginExt(),
@@ -43,4 +43,4 @@ prjs = [
 
 excons.DeclareTargets(env, prjs)
 
-Default("seexpr")
+Default(name)
