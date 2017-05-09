@@ -1,9 +1,12 @@
-.build
-release
-debug
-*.dblite
-excons.cache
-out.png
+/.build
+/release
+/debug
+/*.dblite
+/*.config
+/excons.cache
+/out.png
+/src/*.mtd
+/maya/*.py
 
 # Compiled Object files
 *.slo

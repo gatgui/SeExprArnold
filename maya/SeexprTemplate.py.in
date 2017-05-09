@@ -1,4 +1,4 @@
-# Copyright 2014 Gaetan Guidet
+t# Copyright 2014 Gaetan Guidet
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ import maya.cmds as cmds
 import maya.mel as mel
 from mtoa.ui.ae.shaderTemplate import ShaderAETemplate
 
-class AEaiSeexprTemplate(ShaderAETemplate):
+class AE@SEEXPR_MAYA_NODENAME@Template(ShaderAETemplate):
    
    def expressionChanged(self, nodeAttr, field):
       try:
