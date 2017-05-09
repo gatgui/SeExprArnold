@@ -16,7 +16,7 @@ import maya.cmds as cmds
 import maya.mel as mel
 from mtoa.ui.ae.shaderTemplate import ShaderAETemplate
 
-class AEaiSeexprTemplate(ShaderAETemplate):
+class AE@SEEXPR_MAYA_NODENAME@Template(ShaderAETemplate):
    
    def expressionChanged(self, nodeAttr, field):
       try:
