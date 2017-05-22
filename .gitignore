@@ -5,6 +5,7 @@
 /*.config
 /excons.cache
 /out.png
+/test/*.png
 /src/*.mtd
 /maya/*.py
 
