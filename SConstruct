@@ -4,6 +4,10 @@ import excons
 import excons.config
 from excons.tools import arnold
 
+
+# SeExpr v3 requires c++11
+ARGUMENTS["use-c++11"] = "1"
+
 env = excons.MakeBaseEnv()
 
 arniver = arnold.Version(asString=False)
@@ -22,11 +26,10 @@ GenerateMayaAE = excons.config.AddGenerator(env, "mayaAE", opts)
 mtd = GenerateMtd("src/%s.mtd" % name, "src/seexpr.mtd.in")
 ae = GenerateMayaAE("maya/%sTemplate.py" % maya_name, "maya/SeexprTemplate.py.in")
 
-
 if sys.platform != "win32":
   env.Append(CPPFLAGS=" -Wno-unused-parameter")
 
-excons.Call("SeExpr")
+excons.Call("SeExpr", imp=["RequireSeExpr2"])
 
 prjs = [
   {"name"    : name,
@@ -34,13 +37,11 @@ prjs = [
    "type"    : "dynamicmodule",
    "ext"     : arnold.PluginExt(),
    "srcs"    : glob.glob("src/*.cpp"),
-   "libs"    : ["SeExpr"],
    "install" : {"arnold": mtd,
                 "maya": ae},
-   "custom"  : [arnold.Require]
+   "custom"  : [arnold.Require, RequireSeExpr2]
   }
 ]
 
 excons.DeclareTargets(env, prjs)
 
-Default(name)
