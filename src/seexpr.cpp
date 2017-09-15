@@ -102,24 +102,18 @@ public:
       Li,
       Liu,
       Lo,
-      Ci,
-      Vo,
       u,
       v,
       bu,
       bv,
       x,
       y,
-      sx,
-      sy,
-      we,
       Rl,
       dudx,
       dudy,
       dvdx,
       dvdy,
       time, // between shutter open and close (in [0,1])
-      area,
       frame,
       sample_frame,
       fps,
@@ -130,17 +124,17 @@ public:
       Ldist,
       sc,
       Rt,
-      Rr,
-      Rr_refl,
-      Rr_refr,
-      Rr_diff,
-      Rr_gloss,
+      bounces,
+      bounces_reflect,
+      bounces_transmit,
+      bounces_diff,
+      bounces_specualr,
       undefined,
       // some extra values to identify float/vector
       vecmin = P,
-      vecmax = Vo,
+      vecmax = Lo,
       fltmin = u,
-      fltmax = Rr_gloss
+      fltmax = bounces_specualr
    };
 
    static int NameToEnum(const std::string &name)
@@ -170,24 +164,18 @@ public:
          sNameToEnum["Li"] = Li;
          sNameToEnum["Liu"] = Liu;
          sNameToEnum["Lo"] = Lo;
-         sNameToEnum["Ci"] = Ci;
-         sNameToEnum["Vo"] = Vo;
          sNameToEnum["u"] = u;
          sNameToEnum["v"] = v;
          sNameToEnum["bu"] = bu;
          sNameToEnum["bv"] = bv;
          sNameToEnum["x"] = x;
          sNameToEnum["y"] = y;
-         sNameToEnum["sx"] = sx;
-         sNameToEnum["sy"] = sy;
-         sNameToEnum["we"] = we;
          sNameToEnum["Rl"] = Rl;
          sNameToEnum["dudx"] = dudx;
          sNameToEnum["dudy"] = dudy;
          sNameToEnum["dvdx"] = dvdx;
          sNameToEnum["dvdy"] = dvdy;
          sNameToEnum["time"] = time;
-         sNameToEnum["area"] = area;
          sNameToEnum["frame"] = frame;
          sNameToEnum["sample_frame"] = sample_frame;
          sNameToEnum["fps"] = fps;
@@ -198,11 +186,11 @@ public:
          sNameToEnum["Ldist"] = Ldist;
          sNameToEnum["sc"] = sc;
          sNameToEnum["Rt"] = Rt;
-         sNameToEnum["Rr"] = Rr;
-         sNameToEnum["Rr_refl"] = Rr_refl;
-         sNameToEnum["Rr_refr"] = Rr_refr;
-         sNameToEnum["Rr_diff"] = Rr_diff;
-         sNameToEnum["Rr_gloss"] = Rr_gloss;
+         sNameToEnum["bounces"] = bounces;
+         sNameToEnum["bounces_reflect"] = bounces_reflect;
+         sNameToEnum["bounces_transmit"] = bounces_transmit;
+         sNameToEnum["bounces_diff"] = bounces_diff;
+         sNameToEnum["bounces_specualr"] = bounces_specualr;
       }
 
       std::map<std::string, int>::iterator it = sNameToEnum.find(name);
@@ -241,24 +229,18 @@ public:
          "Li",
          "Liu",
          "Lo",
-         "Ci",
-         "Vo",
          "u",
          "v",
          "bu",
          "bv",
          "x",
          "y",
-         "sx",
-         "sy",
-         "we",
          "Rl",
          "dudx",
          "dudy",
          "dvdx",
          "dvdy",
          "time",
-         "area",
          "frame",
          "sample_frame",
          "fps",
@@ -269,11 +251,11 @@ public:
          "Ldist",
          "sc",
          "Rt",
-         "Rr",
-         "Rr_refl",
-         "Rr_refr",
-         "Rr_diff",
-         "Rr_gloss",
+         "bounces",
+         "bounces_reflect",
+         "bounces_transmit",
+         "bounces_diff",
+         "bounces_specualr",
          "undefined"
       };
 
@@ -294,10 +276,8 @@ public:
       , mSgVarF(0)
       , mSgVarV(0)
       , mSgVarI(0)
-      , mSgVarD(0)
-      , mSgVarB(0)
+      , mSgVarU8(0)
       , mSgVarC(0)
-      , mSgVarU16(0)
       , mFrame(0.0f)
       , mFPS(24.0f)
       , mMotionStart(0.0f)
@@ -329,10 +309,8 @@ public:
       , mSgVarF(0)
       , mSgVarV(0)
       , mSgVarI(0)
-      , mSgVarD(0)
-      , mSgVarB(0)
+      , mSgVarU8(0)
       , mSgVarC(0)
-      , mSgVarU16(0)
       , mFrame(0.0f)
       , mFPS(24.0f)
       , mMotionStart(0.0f)
@@ -393,21 +371,13 @@ public:
       {
          result[0] = double(*mSgVarF);
       }
-      else if (mSgVarD)
-      {
-         result[0] = *mSgVarD;
-      }
       else if (mSgVarI)
       {
          result[0] = double(*mSgVarI);
       }
-      else if (mSgVarU16)
+      else if (mSgVarU8)
       {
-         result[0] = double(*mSgVarU16);
-      }
-      else if (mSgVarB)
-      {
-         result[0] = double(*mSgVarB);
+         result[0] = double(*mSgVarU8);
       }
       else
       {
@@ -606,10 +576,9 @@ public:
       mSgVarF = 0;
       mSgVarV = 0;
       mSgVarI = 0;
-      mSgVarD = 0;
-      mSgVarB = 0;
+      mSgVarU8 = 0;
       mSgVarC = 0;
-      mSgVarU16 = 0;
+      AtLightSample ls;
 
       if (mWhich != undefined)
       {
@@ -650,17 +619,13 @@ public:
          case dDdy:
             mSgVarV = &(sg->dDdy); break;
          case Ld:
-            mSgVarV = &(sg->Ld); break;
+            AiLightsGetSample(sg, ls); mSgVarV = &(ls.Ld); break;
          case Li:
-            mSgVarC = &(sg->Li); break;
+            AiLightsGetSample(sg, ls); mSgVarC = &(ls.Li); break;
          case Liu:
-            mSgVarC = &(sg->Liu); break;
+            AiLightsGetSample(sg, ls); mSgVarC = &(ls.Liu); break;
          case Lo:
-            mSgVarC = &(sg->Lo); break;
-         case Ci:
-            mSgVarC = &(sg->Ci); break;
-         case Vo:
-            mSgVarC = &(sg->Vo); break;
+            AiLightsGetSample(sg, ls); mSgVarC = &(ls.Lo); break;
          case u:
             mSgVarF = &(sg->u); break;
          case v:
@@ -673,14 +638,8 @@ public:
             mSgVarI = &(sg->x); break;
          case y:
             mSgVarI = &(sg->y); break;
-         case sx:
-            mSgVarF = &(sg->sx); break;
-         case sy:
-            mSgVarF = &(sg->sy); break;
-         case we:
-            mSgVarF = &(sg->we); break;
          case Rl:
-            mSgVarD = &(sg->Rl); break;
+            mSgVarF = &(sg->Rl); break;
          case dudx:
             mSgVarF = &(sg->dudx); break;
          case dudy:
@@ -691,8 +650,6 @@ public:
             mSgVarF = &(sg->dvdy); break;
          case time:
             mSgVarF = &(sg->time); break;
-         case area:
-            mSgVarF = &(sg->area); break;
          case frame:
             mSgVarF = &mFrame; break;
          case sample_frame:
@@ -710,28 +667,30 @@ public:
          case shutter_close_frame:
             mSgVarF = &mShutterCloseFrame; break;
          case Ldist:
-            mSgVarF = &(sg->Ldist); break;
+            AiLightsGetSample(sg, ls);
+            mSgVarF = &(ls.Ldist);
+            break;
          case sc:
-            mSgVarB = &(sg->sc); break;
+            mSgVarU8 = &(sg->sc); break;
          case Rt:
-            mSgVarU16 = &(sg->Rt); break;
-         case Rr:
-            mSgVarB = &(sg->Rr); break;
-         case Rr_refl:
-            mSgVarB = &(sg->Rr_refl); break;
-         case Rr_refr:
-            mSgVarB = &(sg->Rr_refr); break;
-         case Rr_diff:
-            mSgVarB = &(sg->Rr_diff); break;
-         case Rr_gloss:
-            mSgVarB = &(sg->Rr_gloss); break;
+            mSgVarU8 = &(sg->Rt); break;
+         case bounces:
+            mSgVarU8 = &(sg->bounces); break;
+         case bounces_reflect:
+            mSgVarU8 = &(sg->bounces_reflect); break;
+         case bounces_transmit:
+            mSgVarU8 = &(sg->bounces_transmit); break;
+         case bounces_diff:
+            mSgVarU8 = &(sg->bounces_diffuse); break;
+         case bounces_specualr:
+            mSgVarU8 = &(sg->bounces_specular); break;
          default:
             AiMsgWarning("[seexpr] Unsupported shader globals \"%s\" (Default to 0)", EnumToName(mWhich));
             break;
          }
       }
 
-      return (mSgVarV != 0 || mSgVarF != 0 || mSgVarI != 0 || mSgVarD != 0);
+      return (mSgVarV != 0 || mSgVarF != 0 || mSgVarI != 0);
    }
 
    inline int which() const
@@ -751,10 +710,8 @@ protected:
    float *mSgVarF;
    AtVector *mSgVarV;
    int *mSgVarI;
-   double *mSgVarD;
-   AtByte *mSgVarB;
-   AtColor *mSgVarC;
-   AtUInt16 *mSgVarU16;
+   uint8_t *mSgVarU8;
+   AtRGB *mSgVarC;
    float mFrame;
    float mFPS;
    float mMotionStart;
@@ -813,43 +770,39 @@ public:
          value = &tmpVal;
       }
 
-      if (AiUserGetRGBAFunc(mName, mSg, &(value->RGBA)))
+      if (AiUserGetRGBAFunc(mName, mSg, value->RGBA()))
       {
          mType = AI_TYPE_RGBA;
       }
-      else if (AiUserGetRGBFunc(mName, mSg, &(value->RGB)))
+      else if (AiUserGetRGBFunc(mName, mSg, value->RGB()))
       {
          mType = AI_TYPE_RGB;
       }
-      else if (AiUserGetVecFunc(mName, mSg, &(value->VEC)))
+      else if (AiUserGetVecFunc(mName, mSg, value->VEC()))
       {
          mType = AI_TYPE_VECTOR;
       }
-      else if (AiUserGetPntFunc(mName, mSg, &(value->PNT)))
+      else if (AiUserGetVec2Func(mName, mSg, value->VEC2()))
       {
-         mType = AI_TYPE_POINT;
+         mType = AI_TYPE_VECTOR2;
       }
-      else if (AiUserGetPnt2Func(mName, mSg, &(value->PNT2)))
-      {
-         mType = AI_TYPE_POINT2;
-      }
-      else if (AiUserGetFltFunc(mName, mSg, &(value->FLT)))
+      else if (AiUserGetFltFunc(mName, mSg, value->FLT()))
       {
          mType = AI_TYPE_FLOAT;
       }
-      else if (AiUserGetIntFunc(mName, mSg, &(value->INT)))
+      else if (AiUserGetIntFunc(mName, mSg, value->INT()))
       {
          mType = AI_TYPE_INT;
       }
-      else if (AiUserGetUIntFunc(mName, mSg, &(value->UINT)))
+      else if (AiUserGetUIntFunc(mName, mSg, value->UINT()))
       {
          mType = AI_TYPE_UINT;
       }
-      else if (AiUserGetByteFunc(mName, mSg, &(value->BYTE)))
+      else if (AiUserGetByteFunc(mName, mSg, value->BYTE()))
       {
          mType = AI_TYPE_BYTE;
       }
-      else if (AiUserGetStrFunc(mName, mSg, &(value->STR)))
+      else if (AiUserGetStrFunc(mName, mSg, value->STR()))
       {
          mType = AI_TYPE_STRING;
       }
@@ -876,19 +829,19 @@ public:
          {
             if (queryVal)
             {
-               if (!AiUserGetStrFunc(mName, mSg, &(value.STR)))
+               if (!AiUserGetStrFunc(mName, mSg, value.STR()))
                {
                   AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                }
                else
                {
-                  result[0] = value.STR;
+                  result[0] = value.STR();
                   return;
                }
             }
             else
             {
-               result[0] = value.STR;
+               result[0] = value.STR();
                return;
             }
          }
@@ -922,13 +875,13 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetByteFunc(mName, mSg, &(value.BYTE)))
+                  if (!AiUserGetByteFunc(mName, mSg, value.BYTE()))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
                   }
                }
-               float v = float(value.BYTE);
+               float v = float(value.BYTE());
                result[0] = v;
                if (mIsVec)
                {
@@ -941,13 +894,13 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetIntFunc(mName, mSg, &(value.INT)))
+                  if (!AiUserGetIntFunc(mName, mSg, value.INT()))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
                   }
                }
-               float v = float(value.INT);
+               float v = float(value.INT());
                result[0] = v;
                if (mIsVec)
                {
@@ -960,13 +913,13 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetUIntFunc(mName, mSg, &(value.UINT)))
+                  if (!AiUserGetUIntFunc(mName, mSg, value.UINT()))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
                   }
                }
-               float v = float(value.UINT);
+               float v = float(value.UINT());
                result[0] = v;
                if (mIsVec)
                {
@@ -979,53 +932,35 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetFltFunc(mName, mSg, &(value.FLT)))
+                  if (!AiUserGetFltFunc(mName, mSg, value.FLT()))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
                   }
                }
-               result[0] = value.FLT;
+               result[0] = value.FLT();
                if (mIsVec)
                {
-                  result[1] = value.FLT;
-                  result[2] = value.FLT;
+                  result[1] = value.FLT();
+                  result[2] = value.FLT();
                }
                return;
             }
-         case AI_TYPE_POINT2:
+         case AI_TYPE_VECTOR2:
             {
                if (queryVal)
                {
-                  if (!AiUserGetPnt2Func(mName, mSg, &(value.PNT2)))
+                  if (!AiUserGetVec2Func(mName, mSg, value.VEC2()))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
                   }
                }
-               result[0] = value.PNT2.x;
+               result[0] = value.VEC2().x;
                if (mIsVec)
                {
-                  result[1] = value.PNT2.y;
+                  result[1] = value.VEC2().y;
                   result[2] = 0.0;
-               }
-               return;
-            }
-         case AI_TYPE_POINT:
-            {
-               if (queryVal)
-               {
-                  if (!AiUserGetPntFunc(mName, mSg, &(value.PNT)))
-                  {
-                     AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
-                     break;
-                  }
-               }
-               result[0] = value.PNT.x;
-               if (mIsVec)
-               {
-                  result[1] = value.PNT.y;
-                  result[2] = value.PNT.z;
                }
                return;
             }
@@ -1033,17 +968,17 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetVecFunc(mName, mSg, &(value.VEC)))
+                  if (!AiUserGetVecFunc(mName, mSg, value.VEC()))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
                   }
                }
-               result[0] = value.VEC.x;
+               result[0] = value.VEC().x;
                if (mIsVec)
                {
-                  result[1] = value.VEC.y;
-                  result[2] = value.VEC.z;
+                  result[1] = value.VEC().y;
+                  result[2] = value.VEC().z;
                }
                return;
             }
@@ -1051,17 +986,17 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetRGBFunc(mName, mSg, &(value.RGB)))
+                  if (!AiUserGetRGBFunc(mName, mSg, value.RGB()))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
                   }
                }
-               result[0] = value.RGB.r;
+               result[0] = value.RGB().r;
                if (mIsVec)
                {
-                  result[1] = value.RGB.g;
-                  result[2] = value.RGB.b;
+                  result[1] = value.RGB().g;
+                  result[2] = value.RGB().b;
                }
                return;
             }
@@ -1069,17 +1004,17 @@ public:
             {
                if (queryVal)
                {
-                  if (!AiUserGetRGBAFunc(mName, mSg, &(value.RGBA)))
+                  if (!AiUserGetRGBAFunc(mName, mSg, value.RGBA()))
                   {
                      AiMsgWarning("[seexpr] Failed to retrieve user variable \"%s\"", mName.c_str());
                      break;
                   }
                }
-               result[0] = value.RGBA.r;
+               result[0] = value.RGBA().r;
                if (mIsVec)
                {
-                  result[1] = value.RGBA.g;
-                  result[2] = value.RGBA.b;
+                  result[1] = value.RGBA().g;
+                  result[2] = value.RGBA().b;
                }
                return;
             }
@@ -1146,7 +1081,7 @@ public:
 
    virtual void eval(double *result)
    {
-      if (mValues && mIndex < mValues->nelements)
+      if (mValues && mIndex < AiArrayGetNumElements(mValues))
       {
          if (mIsVec)
          {
@@ -1504,10 +1439,10 @@ node_update
    std::map<std::string, unsigned int>::iterator varit;
    
    AtArray *fnames = AiNodeGetArray(node, SSTR::fparam_name);
-   data->numfvars = fnames->nelements;
-   for (unsigned int i=0; i<fnames->nelements; ++i)
+   data->numfvars = AiArrayGetNumElements(fnames);
+   for (unsigned int i=0; i<AiArrayGetNumElements(fnames); ++i)
    {
-      std::string var = AiArrayGetStr(fnames, i);
+      std::string var = AiArrayGetStr(fnames, i).c_str();
 
       varit = data->varindex.find(var);
       
@@ -1526,10 +1461,10 @@ node_update
    }
    
    AtArray *vnames = AiNodeGetArray(node, SSTR::vparam_name);
-   data->numvvars = vnames->nelements;
-   for (unsigned int i=0; i<vnames->nelements; ++i)
+   data->numvvars = AiArrayGetNumElements(vnames);
+   for (unsigned int i=0; i<AiArrayGetNumElements(vnames); ++i)
    {
-      std::string var = AiArrayGetStr(vnames, i);
+      std::string var = AiArrayGetStr(vnames, i).c_str();
 
       varit = data->varindex.find(var);
       
@@ -1581,9 +1516,9 @@ node_update
          bool allParamsConstant = true;
          
          AtArray *fvalues = AiNodeGetArray(node, SSTR::fparam_value);
-         if (fvalues->nelements != fnames->nelements)
+         if (AiArrayGetNumElements(fvalues) != AiArrayGetNumElements(fnames))
          {
-            if (fvalues->nelements < fnames->nelements)
+            if (AiArrayGetNumElements(fvalues) < AiArrayGetNumElements(fnames))
             {
                AiMsgWarning("[seexpr] More float param variable names than values. Missing values will be set to 0.");
             }
@@ -1593,9 +1528,9 @@ node_update
             }
          }
          
-         for (unsigned int i=0; i<fnames->nelements; ++i)
+         for (unsigned int i=0; i<AiArrayGetNumElements(fnames); ++i)
          {
-            std::string var = AiArrayGetStr(fnames, i);
+            std::string var = AiArrayGetStr(fnames, i).c_str();
 
             if (expr->usesVar(var))
             {
@@ -1608,9 +1543,9 @@ node_update
          }
          
          AtArray *vvalues = AiNodeGetArray(node, SSTR::vparam_value);
-         if (vvalues->nelements != vnames->nelements)
+         if (AiArrayGetNumElements(vvalues) != AiArrayGetNumElements(vnames))
          {
-            if (vvalues->nelements < vnames->nelements)
+            if (AiArrayGetNumElements(vvalues) < AiArrayGetNumElements(vnames))
             {
                AiMsgWarning("[seexpr] More vector param variable names than values. Missing values will be set to (0, 0, 0).");
             }
@@ -1620,9 +1555,9 @@ node_update
             }
          }
          
-         for (unsigned int i=0; i<vnames->nelements; ++i)
+         for (unsigned int i=0; i<AiArrayGetNumElements(vnames); ++i)
          {
-            std::string var = AiArrayGetStr(vnames, i);
+            std::string var = AiArrayGetStr(vnames, i).c_str();
 
             if (expr->usesVar(var))
             {
@@ -1750,13 +1685,13 @@ shader_evaluate
       {
          AiMsgError("[seexpr] Invalid expression");
       }
-      sg->out.VEC = AiShaderEvalParamVec(p_error_value);
+      sg->out.VEC() = AiShaderEvalParamVec(p_error_value);
    }
    else
    {
       if (data->constant)
       {
-         sg->out.VEC = data->value;
+         sg->out.VEC() = data->value;
       }
       else
       {
@@ -1803,13 +1738,13 @@ shader_evaluate
 
             if (!expr->bindExternals(node, sg))
             {
-               sg->out.VEC = Failed(sg, node, data, data->stopOnError, "Could not bind external parameters");
+               sg->out.VEC() = Failed(sg, node, data, data->stopOnError, "Could not bind external parameters");
                return;
             }
 
             if (!expr->bindShaderParams(fvalues, vvalues))
             {
-               sg->out.VEC = Failed(sg, node, data, data->stopOnError, "Could not bind external parameters");
+               sg->out.VEC() = Failed(sg, node, data, data->stopOnError, "Could not bind external parameters");
                return;
             }
 
@@ -1823,7 +1758,7 @@ shader_evaluate
          }
          else
          {
-            sg->out.VEC = Failed(sg, node, data, data->stopOnError, "Expression is NULL or invalid");
+            sg->out.VEC() = Failed(sg, node, data, data->stopOnError, "Expression is NULL or invalid");
             return;
          }
          
@@ -1832,7 +1767,7 @@ shader_evaluate
             AiCritSecLeave(&(data->mutex));
          }
          
-         sg->out.VEC = rv;
+         sg->out.VEC() = rv;
       }
    }
 }
