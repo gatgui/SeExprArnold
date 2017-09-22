@@ -98,10 +98,6 @@ public:
       dNdy,
       dDdx,
       dDdy,
-      Ld,
-      Li,
-      Liu,
-      Lo,
       u,
       v,
       bu,
@@ -121,7 +117,6 @@ public:
       shutter_close_time,
       shutter_open_frame,
       shutter_close_frame,
-      Ldist,
       sc,
       Rt,
       bounces,
@@ -132,7 +127,7 @@ public:
       undefined,
       // some extra values to identify float/vector
       vecmin = P,
-      vecmax = Lo,
+      vecmax = dDdy,
       fltmin = u,
       fltmax = bounces_specualr
    };
@@ -160,10 +155,6 @@ public:
          sNameToEnum["dNdy"] = dNdy;
          sNameToEnum["dDdx"] = dDdx;
          sNameToEnum["dDdy"] = dDdy;
-         sNameToEnum["Ld"] = Ld;
-         sNameToEnum["Li"] = Li;
-         sNameToEnum["Liu"] = Liu;
-         sNameToEnum["Lo"] = Lo;
          sNameToEnum["u"] = u;
          sNameToEnum["v"] = v;
          sNameToEnum["bu"] = bu;
@@ -183,7 +174,6 @@ public:
          sNameToEnum["shutter_close_time"] = shutter_close_time;
          sNameToEnum["shutter_open_frame"] = shutter_open_frame;
          sNameToEnum["shutter_close_frame"] = shutter_close_frame;
-         sNameToEnum["Ldist"] = Ldist;
          sNameToEnum["sc"] = sc;
          sNameToEnum["Rt"] = Rt;
          sNameToEnum["bounces"] = bounces;
@@ -225,10 +215,6 @@ public:
          "dNdy",
          "dDdx",
          "dDdy",
-         "Ld",
-         "Li",
-         "Liu",
-         "Lo",
          "u",
          "v",
          "bu",
@@ -248,7 +234,6 @@ public:
          "shutter_close_time",
          "shutter_open_frame",
          "shutter_close_frame",
-         "Ldist",
          "sc",
          "Rt",
          "bounces",
@@ -578,7 +563,6 @@ public:
       mSgVarI = 0;
       mSgVarU8 = 0;
       mSgVarC = 0;
-      AtLightSample ls;
 
       if (mWhich != undefined)
       {
@@ -618,14 +602,6 @@ public:
             mSgVarV = &(sg->dDdx); break;
          case dDdy:
             mSgVarV = &(sg->dDdy); break;
-         case Ld:
-            AiLightsGetSample(sg, ls); mSgVarV = &(ls.Ld); break;
-         case Li:
-            AiLightsGetSample(sg, ls); mSgVarC = &(ls.Li); break;
-         case Liu:
-            AiLightsGetSample(sg, ls); mSgVarC = &(ls.Liu); break;
-         case Lo:
-            AiLightsGetSample(sg, ls); mSgVarC = &(ls.Lo); break;
          case u:
             mSgVarF = &(sg->u); break;
          case v:
@@ -666,10 +642,6 @@ public:
             mSgVarF = &mShutterOpenFrame; break;
          case shutter_close_frame:
             mSgVarF = &mShutterCloseFrame; break;
-         case Ldist:
-            AiLightsGetSample(sg, ls);
-            mSgVarF = &(ls.Ldist);
-            break;
          case sc:
             mSgVarU8 = &(sg->sc); break;
          case Rt:
