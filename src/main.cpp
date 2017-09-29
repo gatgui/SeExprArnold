@@ -15,7 +15,7 @@
 #include <ai.h>
 #include <cstring>
 
-extern AtNodeMethods *SeExprMtd;
+extern const AtNodeMethods *SeExprMtd;
 
 namespace SSTR
 {
